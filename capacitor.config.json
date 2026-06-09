@@ -1,0 +1,6 @@
+{
+  "appId": "com.perkorbit.app",
+  "appName": "Perk Orbit",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
