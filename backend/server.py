@@ -1103,6 +1103,29 @@ async def referral_stats(user_pin: str = Query(...)):
 
 app.include_router(api)
 
+# Auth + Market Intelligence (cloud sync + daily program-change cron)
+from auth_intel import build_auth_router, build_intelligence_router, start_intelligence_cron, seed_programs
+
+app.include_router(build_auth_router(db))
+app.include_router(build_intelligence_router(db, EMERGENT_LLM_KEY))
+
+
+@app.on_event("startup")
+async def _on_startup():
+    # Ensure indexes
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.vouchers.create_index([("user_pin", 1), ("category", 1)])
+        await db.vouchers.create_index([("user_pin", 1), ("shared_with", 1)])
+        await db.notifications.create_index([("user_pin", 1), ("created_at", -1)])
+        await db.brand_programs.create_index("brand", unique=True)
+    except Exception as e:
+        log.warning("Index init: %s", e)
+    # Seed program registry
+    await seed_programs(db)
+    # Schedule daily cron
+    start_intelligence_cron(db, EMERGENT_LLM_KEY)
+
 
 @app.get("/")
 async def app_root():

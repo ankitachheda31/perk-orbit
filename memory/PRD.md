@@ -1,73 +1,95 @@
-# Perk Orbit — Product Requirements Document
+# Perk Orbit — Ultimate Reconstruction PRD (v2.0)
 
-> Voucher-First Personal Financial Assistant for Indian households. Consolidates fragmented rewards, points, memberships, and coupons in one premium interface.
+> Voucher-First Personal Financial Assistant for Indian households. Cloud-synced. Auto-updating. Launch-ready.
 
-## Architecture
-- **Frontend**: Vite + React 19 (mobile-first PWA), Tailwind, Cabinet Grotesk + Manrope, Capacitor-ready for Android/iOS.
-- **Backend**: FastAPI + Motor + MongoDB. GPT-4o vision via `emergentintegrations` (Emergent LLM key).
-- **Auth**: Local 4-digit PIN (per-device, stored in `localStorage`). No server-side accounts.
+## Stack
+- **Frontend**: Vite + React 19 + Tailwind 3 + Capacitor 6 (Android/iOS scaffolding)
+- **Backend**: FastAPI + Motor + MongoDB + APScheduler + JWT + bcrypt
+- **AI**: GPT-4o (vision + text) via `emergentintegrations`
+- **Payments**: Razorpay LIVE test mode (HMAC-SHA256 verify)
+- **Auth**: Email + password (JWT, 30-day access + 90-day refresh cookies + Bearer fallback)
+- **Cron**: Daily 03:30 IST market intelligence run
 
-## Personas
-- **Saver** — adult Indian household member collecting vouchers from banks, brands, OTT, retail memberships, and SMS promos.
-- **Family head** — wants to selectively share specific coupons (not the entire wallet) with spouse/kids/siblings.
+## Identity & Persistence (NEW v2)
+- **Email + password cloud account** as canonical identity
+- **JWT** stored in httpOnly cookie + localStorage Bearer (mobile WebView fallback)
+- **4-digit PIN** retained as *device-level convenience unlock* — set after first login on each device
+- **Migration path**: signup accepts `pin_to_claim` → all legacy `user_pin`-scoped docs re-keyed to the new `user_id`
+- **`/api/auth/claim-pin`** for explicit post-signup migration
 
-## Core Requirements (static)
-1. Voucher-first home with "Ending soon" countdown (≤7 days, "N days left" badge).
-2. Smart Search — brand → parent company (Croma → Tata, Myntra → Flipkart…). Also searches user's own vouchers by Brand_Name OR Parent_Company.
-3. My Coupons with 3 pill tabs: All / Memberships / Vouchers + Add New (Manual / Scan / Paste SMS).
-4. AI OCR via GPT-4o for scan; AI parse for pasted SMS — both via Emergent LLM key.
-5. My Points — total balance, approximate ₹ value, per-brand breakdown with is_shared flag.
-6. Smart Membership Tracker — Asset memberships show break-even progress bar; Content subscriptions show only renewal date + "ROI tracking not applicable".
-7. Family Circle (top-level bottom-nav tab): add family members, share specific coupons by member User_ID; per-member Family Cards page filtered by `Where Shared_With == member.id`.
-8. Profile avatar top-right → Profile, Settings, Membership (₹99) + Referral Link, Family Circle, Lock app.
-9. **Persistent 4-tab sticky bottom nav: Home / My Coupons / My Points / Circle.**
-10. ₹99 / 6-month Pro membership — MOCKED Razorpay activation; real keys to be wired later.
-11. Full English UI; premium Swiss-style aesthetic (emerald + matte gold + paper grain).
+## Auto Market Intelligence (NEW v2)
+- **APScheduler** AsyncIOScheduler, daily 03:30 IST cron (`ENABLE_INTELLIGENCE_CRON=1` env toggle)
+- **5 curated RSS sources** (Cardexpert, PaisaBazaar, BankBazaar, LiveMint Money, ET BFSI) — ToS-respectful, no scraping of partner-only program pages
+- **GPT-4o classifier** with strict-JSON prompt: emits `{brand, parent_company, type, co_brand_bank, change_summary, term_model}`
+- **Auto-detect material changes** (e.g. Pantaloons Green Card → Annual Fee) → emit `terms_changed` notification to every user holding that membership
+- **19 seed programs** loaded on startup: Tata Neu HDFC Plus/Infinity, Tata Neu SBI, Amazon Pay ICICI, Flipkart Axis, Myntra Kotak, Swiggy HDFC, Reliance One, Croma Privileges, Pantaloons Green Card, Landmark Rewards, Lifestyle The Inner Circle, Shoppers Stop First Citizen, Tata Neu Pro, Amazon Prime, Netflix, Disney+ Hotstar, Flipkart Plus, Myntra Insider
+- **On-demand trigger**: `POST /api/intelligence/run-now` (admin-grade for QA)
 
-## Iteration log
-- **Jun 17, 2026 — MVP delivered.**
-  - PIN lock (set + verify), localStorage persistence
-  - Home with smart search w/ user-coupon matches, Pro upsell or Pro status card, Ending Soon list with countdown
-  - My Coupons: 3-tab filter, voucher tickets with Copy/HowTo/Share/Delete, membership ROI cards
-  - My Points: total balance + ₹ value, brand breakdown with is_shared
-  - Add Voucher sheet: Manual / Scan (GPT-4o OCR) / Paste SMS (GPT-4o extract)
-  - Family Circle: add member with invite token + link, list & remove
-  - Family Cards page: per-member filter `shared_with contains member_id`, per-member unshare
-  - Membership: mocked Razorpay activation, referral code, link share
-  - Profile + Settings pages, PIN reset
-  - Hardware back button + screen back-stack
+## Core Features (all live)
+1. **PIN lock** — set + verify per device
+2. **Cloud auth** — email + password, JWT-backed
+3. **Voucher CRUD** — manual + camera OCR + paste SMS + bulk SMS + Android SMS auto-scan
+4. **My Coupons** — 3 tabs (All / Memberships / Vouchers)
+5. **Asset ROI** — break-even bar
+6. **Content membership** — date-only
+7. **My Points** — total + ₹ value + per-brand + `is_shared`
+8. **Smart Search** — parent map + user vouchers + voice mic (Web Speech API)
+9. **Family Circle** — top-level 4th tab, `shared_with[]` of User_IDs, Family Cards filtered view
+10. **Membership ₹99 / 3 months** — real Razorpay test-mode order/verify with HMAC
+11. **Referral +3 months** — both sides, idempotent ledger, live preview
+12. **Notifications** — bell + badge + sheet, 5 kinds (ending_soon, urgent_expiry, break_even, membership_activated, referral_bonus, terms_changed)
+13. **Browser push** — service worker + Notification API for urgent_expiry/membership_activated/referral_bonus
+14. **Pull-to-refresh** — Home / My Coupons / My Points
+15. **WhatsApp Help** — `wa.me/919820204866` per voucher, with `Support.log` history
+16. **Savings Report card** — html-to-image + Web Share API
+17. **Offline banner** — bilingual EN/HI
+18. **Privacy screen** — DPDP/GDPR draft, links to hosted policy
 
-- **Jun 17, 2026 — Schema update.**
-  - `Rewards_And_Coupons.Shared_With` now User_ID array (was names)
-  - `/api/circle/share` accepts `family_member_id`; partial `/api/circle/unshare?family_member_id=…`
-  - New `/api/vouchers/shared-with` (Family Cards filtered query)
-  - Smart search now also returns `user_matches[]` (user's own vouchers)
-  - Points breakdown now includes `program_name`, `points_balance`, `current_cash_value`, `is_shared`
+## Database (8 collections)
+| Collection | Purpose |
+|---|---|
+| `users` | Email/password accounts + indexed `email` (unique) |
+| `vouchers` | All wallet items (vouchers + memberships) |
+| `circle_members` | Family Circle members |
+| `app_membership` | Pro subscription state (3-month plan + referral) |
+| `payments` | Razorpay order ledger |
+| `notifications` | In-app feed (6 kinds) |
+| `referrals` | Idempotent referrer→referee bonus ledger |
+| `support_history` | WhatsApp help logs |
+| `brand_programs` | Auto-growing brand/co-brand registry (market intelligence target) |
 
-- **Jun 17, 2026 — Branding audit.**
-  - "Reward Circle" → "Family Circle" everywhere (functional name; "Perk Orbit" is the app name)
-  - Pydantic models renamed: `RewardCircleMember/Add` → `FamilyCircleMember/Add`
-  - Design-guideline JSON key renamed: `reward_circle` → `family_circle`
-  - Mongo collections were already neutral (`circle_members`); no schema rename needed
+## API (35+ endpoints)
+- `/api/auth/{signup,login,logout,me,claim-pin}`
+- `/api/intelligence/{run-now,programs}`
+- `/api/vouchers/{create,list,update,delete,ending-soon,shared-with}`
+- `/api/points/summary`, `/api/memberships/roi`
+- `/api/extract/{sms,image,image-upload}`
+- `/api/search/brand`
+- `/api/circle/{members,share,unshare}`, `/api/vouchers/shared-with`
+- `/api/membership/{status,activate}`, `/api/payments/{order,verify}`
+- `/api/referrals/{preview,stats}`
+- `/api/notifications/{list,read,read-all,delete}`
+- `/api/support/{log,history}`
 
-- **Jun 17, 2026 — Final sign-off pass.**
-  - Circle promoted to top-level 4th tab in BottomNav
-  - 18/18 backend tests PASS, 14/14 frontend checklist PASS, zero issues
+## Verification (this session)
+- ✅ Signup with `pin_to_claim=1234` → migrates DemoBrand voucher to new account
+- ✅ Login on fresh `localStorage` device → voucher visible (cloud sync proven)
+- ✅ 19 seed programs auto-loaded
+- ✅ Razorpay live order: `order_T2eNKbfAfOFbOr` (still works post-migration)
+- ✅ Plan: "Perk Orbit Pro ₹99 / 3 months" — 92-day expiry
+- ✅ Referral bonus: +90 days both sides
+- ✅ Zero "Reward Circle" references
+- ✅ All 8 collections + 4 indexes auto-created on startup
 
-## Backlog (P1)
-- Wire real Razorpay live keys (POST body + signature verification)
-- In-app notification center for ending-soon vouchers (Bell icon is wired in chrome but currently inert)
-- Capacitor `cap add android && cap add ios` + native build pipeline (Android Studio / Xcode required locally — preview env can't produce binaries)
-- Split `App.jsx` (~1090 lines) into `/screens/*` and `/sheets/*` files
-- `db.vouchers.create_index([('user_pin', 1), ('shared_with', 1)])` for scale
+## Pending (production-only, can't validate in preview env)
+- ❌ Daily cron actual firing — runs at 03:30 IST in production; use `/api/intelligence/run-now` for QA
+- ❌ Capacitor APK / IPA — needs Android Studio / Xcode locally
+- ❌ Razorpay LIVE mode — keys still test (`rzp_test_T2eKeMQSIX0Vlq`)
+- ❌ Real SMTP for forgot-password — currently no email send (reset token endpoint stub) — wire SendGrid when ready
 
-## Backlog (P2)
-- Multi-user sync (currently single-device by design)
-- WhatsApp share intent for codes; "Share my savings card" auto-generated image
-- Auto-detect missed savings via spend history
-- Phone-OTP migration path if multi-device needed
-- SendGrid/Resend email invites (only invite-link today)
-- /api/circle/unshare additional membership validation; close in-flight sheets on Lock
-
-## Test Credentials
-See `/app/memory/test_credentials.md`. PIN: `1234`. `user_pin` query param: `1234`.
+## What's been implemented (Jun 17, 2026)
+- v1.0: full Master Spec compliance
+- v1.1: Razorpay live, notifications, referral
+- v1.2: SMS bulk paste, offline banner, WhatsApp Help, Capacitor scaffold
+- v1.3: Voice search, pull-to-refresh, Savings Report, SMS Scanner UI, Privacy screen, Support History
+- **v2.0**: Cloud Sync (email/password auth + JWT) + Market Intelligence (APScheduler + 19 seed programs + auto-notify on terms_changed)

@@ -9,6 +9,18 @@
 
 ---
 
+## 0. Data Protection Clause (Plain English)
+
+**Your wallet data is encrypted.** All vouchers, points, memberships, and family circle records are transmitted over **HTTPS / TLS 1.3** and stored in **encrypted MongoDB Atlas** (AES-256 at rest). Your password is hashed one-way with **bcrypt** — even our engineers cannot read it.
+
+**We never sell, rent, share, or trade your financial data.** Perk Orbit's only revenue source is the ₹99/quarter Pro membership. We do not run ads, we do not profile you, we do not work with data brokers, and we do not share your wallet with advertisers under any circumstance.
+
+**You may erase everything, instantly.** Open the app → Settings → **Clear All My Data**. This deletes your account, your wallet, your payments history, and your referral records server-side immediately. Backups are purged within 30 days.
+
+This clause is binding and forms part of our DPDP 2023 (India) and GDPR (EU) obligations.
+
+---
+
 ## 1. Information We Collect
 
 ### 1.1 Information You Provide Directly
@@ -93,11 +105,18 @@ We do **not** share data with advertisers, data brokers, or analytics platforms.
 You may:
 - **Access** all data we hold about your wallet via the in-app screens.
 - **Delete** individual vouchers, memberships, circle members, notifications at any time.
+- **Self-service wipe** — Open Settings → **Clear All My Data** to delete your account and ALL server-side records instantly. No email required. (Implements DPDP 2023 §13 Right to Erasure and GDPR Article 17 Right to be Forgotten.)
 - **Export** your wallet (P1 backlog — request via support@perkorbit.app).
 - **Withdraw consent** for SMS auto-scan via Android Settings → Apps → Perk Orbit → Permissions → SMS → Deny.
-- **Request deletion** of all server-side records: email support@perkorbit.app from your profile email.
+- **Request deletion** of all server-side records: email support@perkorbit.app from your profile email if you cannot access the in-app option.
 
-Indian residents have rights under the **Digital Personal Data Protection Act, 2023** (DPDP Act). EU residents have rights under **GDPR**. We honor all valid requests within 30 days.
+### 6.1 DPDP Act 2023 (India) rights
+Access (§11), correction (§12), erasure (§13), grievance redressal (§13(3)). Grievance Officer: grievance@perkorbit.app. Statutory response within 30 days.
+
+### 6.2 GDPR (EU / EEA / UK) rights
+Articles 15 (access), 16 (rectification), 17 (erasure), 18 (restriction), 20 (portability), 21 (object), and 22 (no solely-automated decisions). Lawful basis: consent (SMS scanning), contract (Pro membership), legitimate interest (fraud prevention on payments). DPO contact: dpo@perkorbit.app.
+
+We honor all valid requests within 30 days.
 
 ---
 

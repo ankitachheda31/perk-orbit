@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Home, Ticket, Coins, Users, ChevronRight, Search, Plus, Sparkles, Copy, Clock, Share2, BadgeCheck, ArrowLeft, X, ScanLine, MessageSquareText, KeyRound, Trash2, Star, ShieldCheck, Camera, LinkIcon, UserPlus, Settings as SettingsIcon, LogOut, ChevronDown, Bell, Mic, RefreshCw, ImageDown, LifeBuoy, FileText, MessageCircle, Smartphone } from 'lucide-react'
+import { Home, Ticket, Coins, Users, ChevronRight, Search, Plus, Sparkles, Copy, Clock, Share2, BadgeCheck, ArrowLeft, X, ScanLine, MessageSquareText, KeyRound, Trash2, Star, ShieldCheck, Camera, LinkIcon, UserPlus, Settings as SettingsIcon, LogOut, ChevronDown, Bell, Mic, RefreshCw, ImageDown, LifeBuoy, FileText, MessageCircle, Smartphone, Lock, EyeOff, Database, AlertTriangle, Check } from 'lucide-react'
 import { Card, GhostButton, PrimaryButton, ProgressBar, Sheet, Tag, TopBar, Shell, Empty, Toast } from './components/ui'
 import PinLock from './screens/PinLock'
-import { Vouchers, Points, Memberships, Search as SearchApi, Extract, Circle, Membership, Notifications, Referrals, Support } from './lib/api'
+import AuthScreen from './screens/AuthScreen'
+import { Auth, Vouchers, Points, Memberships, Search as SearchApi, Extract, Circle, Membership, Notifications, Referrals, Support } from './lib/api'
 import { getStoredPin, setStoredPin, getProfile, setProfile } from './lib/store'
 import { openRazorpayCheckout } from './lib/razorpay'
 import { OfflineBanner } from './components/ui'
@@ -79,10 +80,13 @@ function ProfileMenu({ open, onClose, onNavigate, memberStatus }) {
       >
         <button data-testid="menu-profile" onClick={() => { onNavigate('profile'); onClose() }} className="w-full flex items-center gap-3 px-5 py-4 hover:bg-ink-50 transition">
           <div className="w-10 h-10 rounded-full bg-emerald-100 grid place-items-center text-emerald-800 font-display font-bold">{(getProfile().name || 'M')[0]}</div>
-          <div className="text-left min-w-0">
+          <div className="text-left min-w-0 flex-1">
             <p className="font-display font-semibold text-ink-900 text-sm leading-tight">{getProfile().name || 'Member'}</p>
             <p className="text-[11px] text-ink-500 truncate">View profile</p>
           </div>
+          <span data-testid="profile-encrypted-badge" className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+            <ShieldCheck className="w-3 h-3" /> Encrypted
+          </span>
         </button>
         <div className="border-t border-ink-100" />
         <button data-testid="menu-membership" onClick={() => { onNavigate('membership'); onClose() }} className="w-full flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-ink-50">
@@ -108,6 +112,10 @@ function ProfileMenu({ open, onClose, onNavigate, memberStatus }) {
           <FileText className="w-4 h-4 text-ink-700" />
           <span className="text-sm font-semibold text-ink-800">Privacy Policy</span>
         </button>
+        <button data-testid="menu-protect" onClick={() => { onNavigate('protect'); onClose() }} className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-ink-50">
+          <ShieldCheck className="w-4 h-4 text-emerald-800" />
+          <span className="text-sm font-semibold text-ink-800">How we protect you</span>
+        </button>
         <button data-testid="menu-settings" onClick={() => { onNavigate('settings'); onClose() }} className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-ink-50">
           <SettingsIcon className="w-4 h-4 text-ink-700" />
           <span className="text-sm font-semibold text-ink-800">Settings</span>
@@ -117,6 +125,72 @@ function ProfileMenu({ open, onClose, onNavigate, memberStatus }) {
           <LogOut className="w-4 h-4" />
           <span className="text-sm font-semibold">Lock app</span>
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ---------- Trust & Transparency: How We Protect You modal ----------
+function HowWeProtectYouModal({ open, onClose }) {
+  if (!open) return null
+  const items = [
+    {
+      icon: Lock,
+      title: 'Encrypted in transit & at rest',
+      body: 'All wallet data travels over HTTPS (TLS 1.3) and is stored in encrypted MongoDB. Your password is one-way hashed with bcrypt — even we can\'t read it.',
+    },
+    {
+      icon: EyeOff,
+      title: 'We never read bank OTPs or personal chats',
+      body: 'When you grant SMS access, Perk Orbit only scans messages matching shopping/loyalty keywords (e.g. "₹", "off", "code", "voucher", "expires"). Bank OTPs, family chats, and DLT-flagged transactional SMS are skipped on-device.',
+    },
+    {
+      icon: Database,
+      title: 'We never sell your data',
+      body: 'Perk Orbit makes money from the ₹99/quarter Pro membership — not from ads or data brokers. Your vouchers, points, and savings are never sold, rented, or shared with advertisers.',
+    },
+    {
+      icon: ShieldCheck,
+      title: 'You stay in control',
+      body: 'Export, delete, or wipe your entire wallet anytime from Settings → Clear All My Data. We honour your DPDP 2023 (India) and GDPR (EU) rights within 30 days.',
+    },
+    {
+      icon: Smartphone,
+      title: 'On-device first',
+      body: 'Your 4-digit unlock PIN never leaves this device. SMS bodies are sent to our backend only for the one voucher you tap "Save" on — never in bulk.',
+    },
+  ]
+  return (
+    <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-end sm:items-center justify-center" data-testid="how-we-protect-modal" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-cream rounded-t-3xl sm:rounded-3xl max-h-[88vh] overflow-y-auto">
+        <div className="sticky top-0 bg-cream/95 backdrop-blur px-5 pt-5 pb-3 flex items-center justify-between border-b border-ink-100">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-emerald-800" />
+            <h2 className="font-display text-xl font-bold text-ink-900">How we protect you</h2>
+          </div>
+          <button data-testid="how-we-protect-close" onClick={onClose} className="w-9 h-9 rounded-full bg-white border border-ink-200 grid place-items-center"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <p className="text-sm text-ink-600 leading-relaxed">
+            Perk Orbit is built privacy-first. Here&apos;s exactly what that means — in plain English (and हिन्दी).
+          </p>
+          {items.map((it, i) => (
+            <div key={i} className="bg-white border border-ink-200 rounded-2xl p-4 flex gap-3" data-testid={`protect-item-${i}`}>
+              <div className="w-10 h-10 rounded-full bg-emerald-50 grid place-items-center shrink-0">
+                <it.icon className="w-5 h-5 text-emerald-800" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-display font-bold text-ink-900 text-sm">{it.title}</p>
+                <p className="text-xs text-ink-600 mt-1 leading-relaxed">{it.body}</p>
+              </div>
+            </div>
+          ))}
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mt-3">
+            <p className="text-xs text-emerald-900 leading-relaxed">
+              <span className="font-bold">Questions?</span> Email <span className="font-mono">support@perkorbit.app</span> or message us on WhatsApp +91 98202 04866. We reply within 24 hours.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -162,12 +236,13 @@ function VoiceMicButton({ onText, lang = 'en-IN' }) {
   )
 }
 
-function SmsScannerScreen({ onBack, pin, toast, onSaved }) {
+function SmsScannerScreen({ onBack, pin, toast, onSaved, onOpenProtect }) {
   const native = isNativeSmsAvailable()
   const [perm, setPerm] = useState({ granted: false })
   const [scanning, setScanning] = useState(false)
   const [candidates, setCandidates] = useState([]) // [{address, body, extracted}]
   const [busyId, setBusyId] = useState(null)
+  const [acknowledged, setAcknowledged] = useState(false)
 
   useEffect(() => { if (native) checkSmsPermission().then(setPerm) }, [native])
 
@@ -230,11 +305,67 @@ function SmsScannerScreen({ onBack, pin, toast, onSaved }) {
             <p className="text-xs text-ink-400 mt-3">Meanwhile, use <span className="font-semibold text-emerald-800">Add new → Paste SMS</span> to import multiple SMS at once.</p>
           </Card>
         ) : !perm.granted ? (
-          <Card className="p-5">
-            <p className="font-display font-bold text-ink-900">Grant SMS permission</p>
-            <p className="text-sm text-ink-500 mt-1 mb-4">Perk Orbit reads incoming SMS on this device only. SMS contents never leave your phone unless you tap "Save". See our <span className="font-semibold text-emerald-800">Privacy Policy</span> for details.</p>
-            <PrimaryButton data-testid="sms-grant" onClick={grant}><ShieldCheck className="w-4 h-4" /> Allow SMS access</PrimaryButton>
-          </Card>
+          <div className="space-y-4" data-testid="sms-permission-context">
+            <Card className="p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-50 grid place-items-center"><ShieldCheck className="w-5 h-5 text-emerald-800" /></div>
+                <div>
+                  <p className="font-display font-bold text-ink-900 leading-tight">Before we read your SMS</p>
+                  <p className="text-[11px] text-ink-500">Permission context · पारदर्शिता</p>
+                </div>
+              </div>
+              <p className="text-sm text-ink-700 leading-relaxed">
+                We use SMS access to <span className="font-semibold">auto-detect shopping vouchers, loyalty points and offer codes</span> in your inbox — so you never miss a deal.
+              </p>
+              <p className="text-sm text-ink-700 leading-relaxed mt-2" lang="hi">
+                <span className="font-semibold">हम आपका SMS</span> केवल <span className="font-semibold">शॉपिंग और लॉयल्टी कूपन</span> ढूंढने के लिए पढ़ते हैं। बैंक OTP, OTP messages, और निजी बातचीत कभी नहीं।
+              </p>
+              <div className="mt-4 space-y-2">
+                <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-200 rounded-2xl p-3" data-testid="perm-yes-1">
+                  <Check className="w-4 h-4 text-emerald-700 mt-0.5 shrink-0" />
+                  <p className="text-xs text-emerald-900 leading-relaxed"><span className="font-bold">YES, we read:</span> SMS containing keywords like &ldquo;₹ off&rdquo;, &ldquo;voucher&rdquo;, &ldquo;code&rdquo;, &ldquo;expires&rdquo;, &ldquo;points&rdquo;, &ldquo;loyalty&rdquo;.</p>
+                </div>
+                <div className="flex items-start gap-2.5 bg-terracotta-50 border border-terracotta-200 rounded-2xl p-3" data-testid="perm-no-1">
+                  <X className="w-4 h-4 text-terracotta-700 mt-0.5 shrink-0" />
+                  <p className="text-xs text-terracotta-900 leading-relaxed"><span className="font-bold">NO, we never read:</span> Bank OTPs, transaction alerts, personal chats, DLT-flagged confidential SMS.</p>
+                </div>
+                <div className="flex items-start gap-2.5 bg-white border border-ink-200 rounded-2xl p-3" data-testid="perm-where-1">
+                  <Lock className="w-4 h-4 text-emerald-800 mt-0.5 shrink-0" />
+                  <p className="text-xs text-ink-700 leading-relaxed"><span className="font-bold">Where it happens:</span> Filtering runs on your device. SMS content reaches our servers <span className="font-bold">only</span> when you tap &ldquo;Save&rdquo; on a detected voucher.</p>
+                </div>
+              </div>
+              <button
+                data-testid="sms-learn-more"
+                onClick={onOpenProtect}
+                className="mt-3 text-xs font-semibold text-emerald-800 underline underline-offset-4 decoration-emerald-300 hover:decoration-emerald-700"
+              >
+                Learn more → How we protect you
+              </button>
+            </Card>
+
+            <Card className="p-5">
+              <label className="flex items-start gap-3 cursor-pointer" data-testid="sms-acknowledge">
+                <input
+                  type="checkbox"
+                  checked={acknowledged}
+                  onChange={(e) => setAcknowledged(e.target.checked)}
+                  className="mt-1 w-4 h-4 accent-emerald-700"
+                />
+                <span className="text-xs text-ink-700 leading-relaxed">
+                  I understand Perk Orbit will scan my SMS <span className="font-semibold">only for vouchers and loyalty offers</span>, and that I can revoke this anytime from device Settings.
+                </span>
+              </label>
+              <PrimaryButton
+                data-testid="sms-grant"
+                onClick={grant}
+                disabled={!acknowledged}
+                className="mt-4"
+              >
+                <ShieldCheck className="w-4 h-4" /> Allow SMS access
+              </PrimaryButton>
+              <p className="text-[10px] text-ink-400 text-center mt-2">You can change this anytime · DPDP 2023 compliant</p>
+            </Card>
+          </div>
         ) : (
           <>
             <Card className="p-5 flex items-center justify-between gap-3">
@@ -315,22 +446,65 @@ function SupportHistoryScreen({ onBack, pin }) {
 }
 
 // ---------- Privacy Policy ----------
-function PrivacyScreen({ onBack }) {
+function PrivacyScreen({ onBack, onOpenProtect }) {
   return (
     <>
-      <TopBar title="Privacy Policy" onBack={onBack} />
-      <main className="px-5 space-y-4 text-sm text-ink-700 leading-relaxed">
-        <Card className="p-5 space-y-3">
-          <p className="font-display text-lg font-bold text-ink-900">Your data, your control</p>
-          <p>Perk Orbit was designed privacy-first. Your 4-digit PIN never leaves your device. We don't sell data, don't run ads, don't profile you.</p>
-          <p className="font-semibold text-ink-900">SMS permission (Android only)</p>
-          <p>When you grant SMS access, Perk Orbit scans incoming SMS <span className="font-bold">on your device only</span>. The full SMS body is sent to our backend only when you tap "Save to Perk Orbit" on a detected voucher — and only that one message, never in bulk.</p>
-          <p className="font-semibold text-ink-900">Payments</p>
-          <p>₹99 quarterly membership is processed by Razorpay. We never see or store your card number, UPI ID, or bank credentials. Only the order ID and signature are retained for verification.</p>
-          <p className="font-semibold text-ink-900">Your rights</p>
-          <p>Access, delete, or export your wallet anytime. Email <span className="font-semibold text-emerald-800">support@perkorbit.app</span> for any data request. Compliant with India's DPDP Act 2023.</p>
-          <p className="text-[11px] text-ink-500 pt-2 border-t border-ink-100">Full policy: perkorbit.app/privacy</p>
+      <TopBar title="Privacy Policy" onBack={onBack} subtitle="DPDP 2023 (India) & GDPR (EU) compliant" />
+      <main className="px-5 space-y-4 text-sm text-ink-700 leading-relaxed pb-10">
+        <Card className="p-5 bg-emerald-50/40 border-emerald-200">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldCheck className="w-5 h-5 text-emerald-800" />
+            <p className="font-display text-lg font-bold text-ink-900">Your data, your control</p>
+          </div>
+          <p className="text-xs text-ink-600">Last updated · February 2026 · Operator: Perk Orbit · Contact: <span className="font-mono">support@perkorbit.app</span></p>
+          <GhostButton data-testid="privacy-open-protect" onClick={onOpenProtect} className="mt-4">
+            <ShieldCheck className="w-4 h-4" /> How we protect you (plain English)
+          </GhostButton>
         </Card>
+
+        <Card className="p-5 space-y-2">
+          <p className="font-display font-bold text-ink-900">1. Data Protection Clause</p>
+          <p>All wallet data (vouchers, points, memberships, family circle) is <span className="font-bold">encrypted in transit (TLS 1.3)</span> and stored in <span className="font-bold">encrypted MongoDB</span>. Your password is one-way hashed with <span className="font-bold">bcrypt</span> — recoverable only via reset, never by us.</p>
+          <p><span className="font-bold">Perk Orbit never sells, rents, or shares your financial data with third parties.</span> We do not run ads. We do not profile you. We make money exclusively from the ₹99/quarter Pro membership.</p>
+        </Card>
+
+        <Card className="p-5 space-y-2">
+          <p className="font-display font-bold text-ink-900">2. What we collect</p>
+          <p>• <span className="font-semibold">You provide:</span> Email, name, phone (optional), vouchers/codes/expiries you save.</p>
+          <p>• <span className="font-semibold">SMS (Android only, with consent):</span> Filtered on-device for shopping keywords; only the SMS you tap &ldquo;Save&rdquo; reaches our backend.</p>
+          <p>• <span className="font-semibold">Payments:</span> Razorpay processes payments. We retain only order_id, payment_id and signature — never card/UPI/bank credentials.</p>
+        </Card>
+
+        <Card className="p-5 space-y-2">
+          <p className="font-display font-bold text-ink-900">3. What we do NOT collect</p>
+          <p>✗ Bank OTPs · ✗ Personal chats · ✗ Contacts · ✗ Call logs · ✗ Location · ✗ Browsing history · ✗ Biometrics · ✗ Government IDs.</p>
+        </Card>
+
+        <Card className="p-5 space-y-2">
+          <p className="font-display font-bold text-ink-900">4. Your rights — DPDP 2023 (India)</p>
+          <p>Under the Digital Personal Data Protection Act 2023, you have the right to: <span className="font-semibold">access</span>, <span className="font-semibold">correct</span>, <span className="font-semibold">erase</span>, and <span className="font-semibold">withdraw consent</span> for your personal data. Use Settings → <span className="font-semibold">Clear All My Data</span> to exercise erasure instantly. Grievance Officer: <span className="font-mono">grievance@perkorbit.app</span>.</p>
+        </Card>
+
+        <Card className="p-5 space-y-2">
+          <p className="font-display font-bold text-ink-900">5. Your rights — GDPR (EU)</p>
+          <p>If you are in the EEA/UK, GDPR Articles 15–22 apply: right to <span className="font-semibold">access (Art.15)</span>, <span className="font-semibold">rectification (Art.16)</span>, <span className="font-semibold">erasure / &ldquo;right to be forgotten&rdquo; (Art.17)</span>, <span className="font-semibold">data portability (Art.20)</span>, and to <span className="font-semibold">object (Art.21)</span>. Lawful basis: consent (SMS), contract (membership), legitimate interest (fraud-prevention on payments). DPO: <span className="font-mono">dpo@perkorbit.app</span>.</p>
+        </Card>
+
+        <Card className="p-5 space-y-2">
+          <p className="font-display font-bold text-ink-900">6. Sub-processors</p>
+          <p>• <span className="font-semibold">OpenAI / Emergent</span> — for OCR & SMS parsing (data-processing-only, no training).</p>
+          <p>• <span className="font-semibold">Razorpay</span> — PCI-DSS payment processor.</p>
+          <p>• <span className="font-semibold">MongoDB Atlas</span> — encrypted database hosting (Mumbai region).</p>
+        </Card>
+
+        <Card className="p-5 space-y-2">
+          <p className="font-display font-bold text-ink-900">7. Retention & deletion</p>
+          <p>We retain your data only as long as your account is active. Tap <span className="font-semibold">Clear All My Data</span> to delete everything immediately. Backups are purged within 30 days.</p>
+        </Card>
+
+        <p className="text-[11px] text-ink-500 pt-2 text-center">
+          Full policy · <span className="font-mono">perkorbit.app/privacy</span>
+        </p>
       </main>
     </>
   )
@@ -1045,21 +1219,125 @@ function ProfilePage({ onBack }) {
   )
 }
 
-function SettingsPage({ onBack, onResetPin }) {
+function SettingsPage({ onBack, onResetPin, onOpenProtect, onOpenPrivacy, onWipe, onLogout, toast }) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const wipe = async () => {
+    setBusy(true)
+    try {
+      await Auth.wipe()
+      localStorage.removeItem('perk_orbit_token')
+      setStoredPin(null)
+      setProfile({ name: '', email: '', phone: '' })
+      toast?.('All your data has been deleted')
+      onWipe?.()
+    } catch (e) {
+      toast?.('Could not delete · try again')
+      setBusy(false)
+    }
+  }
   return (
     <>
       <TopBar title="Settings" onBack={onBack} />
-      <main className="px-5 space-y-3">
+      <main className="px-5 space-y-3 pb-10">
+        {/* Trust banner */}
+        <Card className="p-5 bg-emerald-50/40 border-emerald-200" data-testid="settings-trust-card">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full bg-emerald-100 grid place-items-center"><ShieldCheck className="w-5 h-5 text-emerald-800" /></div>
+            <div className="min-w-0">
+              <p className="font-display font-bold text-ink-900">Your data is encrypted</p>
+              <p className="text-[11px] text-ink-600">TLS 1.3 in transit · bcrypt + AES at rest · DPDP 2023 & GDPR compliant</p>
+            </div>
+          </div>
+          <button data-testid="settings-learn-protect" onClick={onOpenProtect} className="mt-3 text-xs font-semibold text-emerald-800 underline underline-offset-4 decoration-emerald-300">
+            Learn more → How we protect you
+          </button>
+        </Card>
+
         <Card className="p-5">
           <p className="font-display font-bold text-ink-900 mb-2">App PIN</p>
-          <p className="text-xs text-ink-500 mb-3">PIN is stored locally on this device only.</p>
+          <p className="text-xs text-ink-500 mb-3">PIN is stored locally on this device only. Cloud account stays signed in across devices.</p>
           <GhostButton data-testid="reset-pin" onClick={onResetPin}><KeyRound className="w-4 h-4" /> Change PIN</GhostButton>
         </Card>
+
+        <Card className="p-5">
+          <p className="font-display font-bold text-ink-900 mb-2">Privacy & legal</p>
+          <button data-testid="settings-privacy" onClick={onOpenPrivacy} className="w-full flex items-center justify-between py-3 border-b border-ink-100">
+            <span className="text-sm text-ink-800 inline-flex items-center gap-2"><FileText className="w-4 h-4 text-ink-700" /> Privacy Policy</span>
+            <ChevronRight className="w-4 h-4 text-ink-400" />
+          </button>
+          <button data-testid="settings-protect" onClick={onOpenProtect} className="w-full flex items-center justify-between py-3">
+            <span className="text-sm text-ink-800 inline-flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-emerald-800" /> How we protect you</span>
+            <ChevronRight className="w-4 h-4 text-ink-400" />
+          </button>
+        </Card>
+
+        <Card className="p-5">
+          <p className="font-display font-bold text-ink-900 mb-1">Sign out</p>
+          <p className="text-xs text-ink-500 mb-3">Sign out of this device. Your wallet stays safe in the cloud.</p>
+          <GhostButton data-testid="settings-logout" onClick={onLogout}><LogOut className="w-4 h-4" /> Sign out</GhostButton>
+        </Card>
+
+        {/* Danger zone */}
+        <Card className="p-5 border-terracotta-200 bg-terracotta-50/30" data-testid="settings-danger-zone">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="w-4 h-4 text-terracotta-700" />
+            <p className="font-display font-bold text-terracotta-800">Danger zone</p>
+          </div>
+          <p className="text-xs text-ink-700 leading-relaxed mb-3">
+            Permanently delete <span className="font-bold">your account and ALL your data</span> — vouchers, points, family circle, payment history, referrals. This cannot be undone.
+          </p>
+          <button
+            data-testid="settings-wipe-open"
+            onClick={() => setConfirmOpen(true)}
+            className="w-full bg-terracotta-700 text-white font-semibold py-3 rounded-full active:scale-95 transition inline-flex items-center justify-center gap-2"
+          >
+            <Trash2 className="w-4 h-4" /> Clear All My Data
+          </button>
+          <p className="text-[10px] text-ink-500 text-center mt-2">DPDP 2023 Right to Erasure · GDPR Art. 17</p>
+        </Card>
+
         <Card className="p-5">
           <p className="font-display font-bold text-ink-900 mb-1">About</p>
           <p className="text-xs text-ink-500">Perk Orbit · v1.0 · Built for Indian households.</p>
         </Card>
       </main>
+
+      {/* Confirm wipe modal */}
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center" data-testid="wipe-confirm-modal" onClick={() => !busy && setConfirmOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-10 h-10 rounded-full bg-terracotta-100 grid place-items-center"><AlertTriangle className="w-5 h-5 text-terracotta-700" /></div>
+              <h2 className="font-display text-xl font-bold text-ink-900">Delete everything?</h2>
+            </div>
+            <p className="text-sm text-ink-700 leading-relaxed mb-3">
+              This will permanently remove your account, vouchers, points, family circle, and history. It <span className="font-bold">cannot be undone</span>.
+            </p>
+            <p className="text-xs text-ink-600 mb-2">Type <span className="font-mono font-bold text-terracotta-700">DELETE</span> to confirm:</p>
+            <input
+              data-testid="wipe-confirm-input"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              autoFocus
+              className="w-full bg-ink-50 border border-ink-200 rounded-2xl px-4 py-3 text-sm font-mono tracking-wider"
+              placeholder="DELETE"
+            />
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <GhostButton data-testid="wipe-cancel" onClick={() => setConfirmOpen(false)} disabled={busy}>Cancel</GhostButton>
+              <button
+                data-testid="wipe-confirm"
+                onClick={wipe}
+                disabled={busy || confirmText.trim().toUpperCase() !== 'DELETE'}
+                className="w-full bg-terracotta-700 text-white font-semibold py-3.5 rounded-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+              >
+                {busy ? 'Deleting…' : (<><Trash2 className="w-4 h-4" /> Delete</>)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -1220,9 +1498,20 @@ function MembershipPage({ onBack, pin, status, refresh, toast, online = true }) 
                   <p style={{ fontSize: 26, color: '#E5E7EB' }}>Join me on Perk Orbit · use my code</p>
                   <p style={{ fontSize: 72, fontWeight: 800, color: '#FCD34D', fontFamily: 'JetBrains Mono, monospace', marginTop: 8 }}>{status?.referral_code}</p>
                   <p style={{ fontSize: 24, color: '#9CA3AF', marginTop: 16 }}>Both of us get 3 months FREE on Pro 🎁</p>
+                  <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 18, color: '#34D399', fontWeight: 700 }}>🔒</span>
+                    <p style={{ fontSize: 16, color: '#9CA3AF', lineHeight: 1.5 }}>
+                      Your data is encrypted &amp; private. We only track savings, not your identity.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
+
+            <p className="text-[11px] text-ink-500 text-center inline-flex items-center justify-center gap-1.5" data-testid="savings-report-trust-footer">
+              <ShieldCheck className="w-3 h-3 text-emerald-800" />
+              Your data is encrypted &amp; private. We only track savings, not your identity.
+            </p>
 
             <GhostButton data-testid="share-savings-report" onClick={shareSavingsReport}>
               <ImageDown className="w-4 h-4" /> Share Savings Report card
@@ -1553,6 +1842,10 @@ function ShareSheet({ open, onClose, voucher, pin, toast, refresh }) {
 
 // ---------- Main App ----------
 export default function App() {
+  const [authUser, setAuthUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('perk_orbit_user') || 'null') } catch { return null }
+  })
+  const [authChecked, setAuthChecked] = useState(false)
   const [pin, setPin] = useState(() => getStoredPin())
   const [locked, setLocked] = useState(true) // require PIN each session
   const [stack, setStack] = useState([{ screen: 'home' }])
@@ -1566,6 +1859,7 @@ export default function App() {
   const [notifsOpen, setNotifsOpen] = useState(false)
   const [unread, setUnread] = useState(0)
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const [protectOpen, setProtectOpen] = useState(false)
 
   // Online / offline detection
   useEffect(() => {
@@ -1621,13 +1915,37 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop)
   }, [stack.length])
 
+  // Verify cloud session on cold start
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const me = await Auth.me()
+        if (alive && me) setAuthUser({ id: me._id || me.id, email: me.email, name: me.name, phone: me.phone })
+      } catch {
+        if (alive) { setAuthUser(null); localStorage.removeItem('perk_orbit_token') }
+      } finally {
+        if (alive) setAuthChecked(true)
+      }
+    })()
+    return () => { alive = false }
+  }, [])
+
   // PIN flow
+  if (!authChecked) return null
+  if (!authUser) {
+    return <AuthScreen existingPin={pin} onAuthed={(u) => { setAuthUser({ id: u.id, email: u.email, name: u.name, phone: u.phone }); setLocked(false) }} />
+  }
   if (!pin) {
     return <PinLock mode="set" onSuccess={(p) => { setStoredPin(p); setPin(p); setLocked(false) }} />
   }
   if (locked) {
     return <PinLock mode="verify" expected={pin} onSuccess={() => setLocked(false)} />
   }
+
+  // After auth: use user's id as canonical scope (cloud sync). Legacy PIN data
+  // was migrated via signup's pin_to_claim. PIN remains as device-unlock.
+  const effectivePin = authUser?.id || pin
 
   const handleNavigate = (where) => {
     if (where === 'lock') { setLocked(true); setStack([{ screen: 'home' }]); return }
@@ -1638,6 +1956,23 @@ export default function App() {
     if (where === 'sms-scanner') push('sms-scanner')
     if (where === 'support') push('support')
     if (where === 'privacy') push('privacy')
+    if (where === 'protect') setProtectOpen(true)
+  }
+
+  const handleLogout = async () => {
+    try { await Auth.logout() } catch { /* ignore */ }
+    localStorage.removeItem('perk_orbit_token')
+    setAuthUser(null)
+    setLocked(true)
+    setStack([{ screen: 'home' }])
+  }
+
+  const handleWipeComplete = () => {
+    setAuthUser(null)
+    setPin(null)
+    setLocked(true)
+    setMemberStatus(null)
+    setStack([{ screen: 'home' }])
   }
 
   const onOpenAdd = (kind) => { if (kind === 'upsell') { push('membership'); return } setAddOpen(true) }
@@ -1649,7 +1984,7 @@ export default function App() {
       <div key={current.screen} className="page-enter">
         {current.screen === 'home' && (
           <HomeScreen
-            pin={pin}
+            pin={effectivePin}
             memberStatus={memberStatus}
             onProfileClick={() => setProfileOpen(true)}
             onOpenAdd={onOpenAdd}
@@ -1662,18 +1997,28 @@ export default function App() {
           />
         )}
         {current.screen === 'coupons' && (
-          <MyCouponsScreen pin={pin} onProfileClick={() => setProfileOpen(true)} onOpenAdd={onOpenAdd} toast={toast} refreshKey={refreshKey} openHowTo={setHowToFor} openShareSheet={setShareFor} setRefreshKey={setRefreshKey} bumpRefresh={() => setRefreshKey(k => k + 1)} />
+          <MyCouponsScreen pin={effectivePin} onProfileClick={() => setProfileOpen(true)} onOpenAdd={onOpenAdd} toast={toast} refreshKey={refreshKey} openHowTo={setHowToFor} openShareSheet={setShareFor} setRefreshKey={setRefreshKey} bumpRefresh={() => setRefreshKey(k => k + 1)} />
         )}
         {current.screen === 'points' && (
-          <MyPointsScreen pin={pin} onProfileClick={() => setProfileOpen(true)} refreshKey={refreshKey} openHowTo={setHowToFor} bumpRefresh={() => setRefreshKey(k => k + 1)} />
+          <MyPointsScreen pin={effectivePin} onProfileClick={() => setProfileOpen(true)} refreshKey={refreshKey} openHowTo={setHowToFor} bumpRefresh={() => setRefreshKey(k => k + 1)} />
         )}
         {current.screen === 'profile' && (<ProfilePage onBack={pop} />)}
-        {current.screen === 'settings' && (<SettingsPage onBack={pop} onResetPin={() => { setStoredPin(null); setPin(null) }} />)}
-        {current.screen === 'membership' && (<MembershipPage onBack={pop} pin={pin} status={memberStatus} refresh={refreshMember} toast={toast} online={online} />)}
+        {current.screen === 'settings' && (
+          <SettingsPage
+            onBack={pop}
+            onResetPin={() => { setStoredPin(null); setPin(null) }}
+            onOpenProtect={() => setProtectOpen(true)}
+            onOpenPrivacy={() => push('privacy')}
+            onLogout={handleLogout}
+            onWipe={handleWipeComplete}
+            toast={toast}
+          />
+        )}
+        {current.screen === 'membership' && (<MembershipPage onBack={pop} pin={effectivePin} status={memberStatus} refresh={refreshMember} toast={toast} online={online} />)}
         {current.screen === 'circle' && (
           <CirclePage
             onBack={stack.length > 1 ? pop : undefined}
-            pin={pin}
+            pin={effectivePin}
             toast={toast}
             onOpenMember={(m) => push('family-cards', { member: m })}
             onProfileClick={() => setProfileOpen(true)}
@@ -1682,26 +2027,28 @@ export default function App() {
         {current.screen === 'family-cards' && (
           <FamilyCardsPage
             onBack={pop}
-            pin={pin}
+            pin={effectivePin}
             member={current.params.member}
             toast={toast}
             refresh={() => setRefreshKey(k => k + 1)}
             openHowTo={setHowToFor}
           />
         )}
-        {current.screen === 'sms-scanner' && (<SmsScannerScreen onBack={pop} pin={pin} toast={toast} onSaved={() => setRefreshKey(k => k + 1)} />)}
-        {current.screen === 'support' && (<SupportHistoryScreen onBack={pop} pin={pin} />)}
-        {current.screen === 'privacy' && (<PrivacyScreen onBack={pop} />)}
+        {current.screen === 'sms-scanner' && (<SmsScannerScreen onBack={pop} pin={effectivePin} toast={toast} onSaved={() => setRefreshKey(k => k + 1)} onOpenProtect={() => setProtectOpen(true)} />)}
+        {current.screen === 'support' && (<SupportHistoryScreen onBack={pop} pin={effectivePin} />)}
+        {current.screen === 'privacy' && (<PrivacyScreen onBack={pop} onOpenProtect={() => setProtectOpen(true)} />)}
       </div>
 
+      <HowWeProtectYouModal open={protectOpen} onClose={() => setProtectOpen(false)} />
+
       <ProfileMenu open={profileOpen} onClose={() => setProfileOpen(false)} onNavigate={handleNavigate} memberStatus={memberStatus} />
-      <AddVoucherSheet open={addOpen} onClose={() => setAddOpen(false)} pin={pin} onSaved={() => setRefreshKey(k => k + 1)} toast={toast} />
+      <AddVoucherSheet open={addOpen} onClose={() => setAddOpen(false)} pin={effectivePin} onSaved={() => setRefreshKey(k => k + 1)} toast={toast} />
       <HowToSheet voucher={howToFor} open={!!howToFor} onClose={() => setHowToFor(null)} />
-      <ShareSheet open={!!shareFor} onClose={() => setShareFor(null)} voucher={shareFor} pin={pin} toast={toast} refresh={() => setRefreshKey(k => k + 1)} />
+      <ShareSheet open={!!shareFor} onClose={() => setShareFor(null)} voucher={shareFor} pin={effectivePin} toast={toast} refresh={() => setRefreshKey(k => k + 1)} />
       <NotificationSheet
         open={notifsOpen}
         onClose={() => setNotifsOpen(false)}
-        pin={pin}
+        pin={effectivePin}
         toast={toast}
         onJumpToScreen={(screen) => {
           if (['home','coupons','points','circle'].includes(screen)) switchTab(screen)

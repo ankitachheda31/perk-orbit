@@ -3,7 +3,28 @@ import axios from 'axios'
 const BACKEND = import.meta.env.VITE_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
 const API = `${BACKEND}/api`
 
-export const api = axios.create({ baseURL: API, timeout: 60000 })
+export const api = axios.create({ baseURL: API, timeout: 60000, withCredentials: true })
+
+// Attach Bearer token from localStorage if present (mobile WebView cookie fallback)
+api.interceptors.request.use((config) => {
+  const t = localStorage.getItem('perk_orbit_token')
+  if (t) config.headers.Authorization = `Bearer ${t}`
+  return config
+})
+
+export const Auth = {
+  signup: (body) => api.post('/auth/signup', body).then(r => r.data),
+  login: (body) => api.post('/auth/login', body).then(r => r.data),
+  me: () => api.get('/auth/me').then(r => r.data),
+  logout: () => api.post('/auth/logout').then(r => r.data),
+  claimPin: (pin) => api.post('/auth/claim-pin', { pin }).then(r => r.data),
+  wipe: () => api.post('/auth/wipe').then(r => r.data),
+}
+
+export const Intelligence = {
+  programs: (limit = 50) => api.get('/intelligence/programs', { params: { limit } }).then(r => r.data),
+  runNow: () => api.post('/intelligence/run-now').then(r => r.data),
+}
 
 export const Vouchers = {
   list: (pin, category) => api.get('/vouchers', { params: { user_pin: pin, category } }).then(r => r.data),
