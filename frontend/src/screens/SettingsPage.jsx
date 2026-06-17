@@ -1,0 +1,133 @@
+import React, { useState } from 'react'
+import { ShieldCheck, KeyRound, ChevronRight, FileText, MessageCircle, Lock, Sparkles, LogOut, Trash2, AlertTriangle } from 'lucide-react'
+import { Card, GhostButton, TopBar } from '../components/ui'
+import { Auth } from '../lib/api'
+import { setStoredPin, setProfile } from '../lib/store'
+
+export default function SettingsPage({ onBack, onResetPin, onOpenProtect, onOpenPrivacy, onOpenFAQ, onOpenPrivacyControl, onOpenPerkTips, onReplayTour, onWipe, onLogout, toast }) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const wipe = async () => {
+    setBusy(true)
+    try {
+      await Auth.wipe()
+      localStorage.removeItem('perk_orbit_token')
+      setStoredPin(null)
+      setProfile({ name: '', email: '', phone: '' })
+      toast?.('All your data has been deleted')
+      onWipe?.()
+    } catch {
+      toast?.('Could not delete · try again')
+      setBusy(false)
+    }
+  }
+  return (
+    <>
+      <TopBar title="Settings" onBack={onBack} />
+      <main className="px-5 space-y-3 pb-10">
+        <Card className="p-5 bg-emerald-50/40 border-emerald-200" data-testid="settings-trust-card">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full bg-emerald-100 grid place-items-center"><ShieldCheck className="w-5 h-5 text-emerald-800" /></div>
+            <div className="min-w-0">
+              <p className="font-display font-bold text-ink-900">Your data is encrypted</p>
+              <p className="text-[11px] text-ink-600">TLS 1.3 in transit · bcrypt + AES at rest · DPDP 2023 & GDPR compliant</p>
+            </div>
+          </div>
+          <button data-testid="settings-learn-protect" onClick={onOpenProtect} className="mt-3 text-xs font-semibold text-emerald-800 underline underline-offset-4 decoration-emerald-300">
+            Learn more → How we protect you
+          </button>
+        </Card>
+
+        <Card className="p-5">
+          <p className="font-display font-bold text-ink-900 mb-2">App PIN</p>
+          <p className="text-xs text-ink-500 mb-3">PIN is stored locally on this device only. Cloud account stays signed in across devices.</p>
+          <GhostButton data-testid="reset-pin" onClick={onResetPin}><KeyRound className="w-4 h-4" /> Change PIN</GhostButton>
+        </Card>
+
+        <Card className="p-5">
+          <p className="font-display font-bold text-ink-900 mb-2">Privacy & legal</p>
+          <button data-testid="settings-privacy" onClick={onOpenPrivacy} className="w-full flex items-center justify-between py-3 border-b border-ink-100">
+            <span className="text-sm text-ink-800 inline-flex items-center gap-2"><FileText className="w-4 h-4 text-ink-700" /> Privacy Policy</span>
+            <ChevronRight className="w-4 h-4 text-ink-400" />
+          </button>
+          <button data-testid="settings-faq" onClick={onOpenFAQ} className="w-full flex items-center justify-between py-3 border-b border-ink-100">
+            <span className="text-sm text-ink-800 inline-flex items-center gap-2"><MessageCircle className="w-4 h-4 text-ink-700" /> Security FAQ</span>
+            <ChevronRight className="w-4 h-4 text-ink-400" />
+          </button>
+          <button data-testid="settings-privacy-control" onClick={onOpenPrivacyControl} className="w-full flex items-center justify-between py-3 border-b border-ink-100">
+            <span className="text-sm text-ink-800 inline-flex items-center gap-2"><Lock className="w-4 h-4 text-ink-700" /> Privacy Control</span>
+            <ChevronRight className="w-4 h-4 text-ink-400" />
+          </button>
+          <button data-testid="settings-protect" onClick={onOpenProtect} className="w-full flex items-center justify-between py-3">
+            <span className="text-sm text-ink-800 inline-flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-emerald-800" /> How we protect you</span>
+            <ChevronRight className="w-4 h-4 text-ink-400" />
+          </button>
+        </Card>
+
+        <Card className="p-5">
+          <p className="font-display font-bold text-ink-900 mb-2">Features</p>
+          <button data-testid="settings-perk-tips" onClick={onOpenPerkTips} className="w-full flex items-center justify-between py-3 border-b border-ink-100">
+            <span className="text-sm text-ink-800 inline-flex items-center gap-2"><Sparkles className="w-4 h-4 text-emerald-700" /> Perk Tips · Masterclass</span>
+            <ChevronRight className="w-4 h-4 text-ink-400" />
+          </button>
+          <button data-testid="settings-replay-tour" onClick={onReplayTour} className="w-full flex items-center justify-between py-3">
+            <span className="text-sm text-ink-800 inline-flex items-center gap-2"><Sparkles className="w-4 h-4 text-emerald-700" /> Take the tour again</span>
+            <ChevronRight className="w-4 h-4 text-ink-400" />
+          </button>
+        </Card>
+
+        <Card className="p-5">
+          <p className="font-display font-bold text-ink-900 mb-1">Sign out</p>
+          <p className="text-xs text-ink-500 mb-3">Sign out of this device. Your wallet stays safe in the cloud.</p>
+          <GhostButton data-testid="settings-logout" onClick={onLogout}><LogOut className="w-4 h-4" /> Sign out</GhostButton>
+        </Card>
+
+        <Card className="p-5 border-terracotta-200 bg-terracotta-50/30" data-testid="settings-danger-zone">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="w-4 h-4 text-terracotta-700" />
+            <p className="font-display font-bold text-terracotta-800">Danger zone</p>
+          </div>
+          <p className="text-xs text-ink-700 leading-relaxed mb-3">
+            Permanently delete <span className="font-bold">your account and ALL your data</span> — vouchers, points, family circle, payment history, referrals. This cannot be undone.
+          </p>
+          <button data-testid="settings-wipe-open" onClick={() => setConfirmOpen(true)}
+            className="w-full bg-terracotta-700 text-white font-semibold py-3 rounded-full active:scale-95 transition inline-flex items-center justify-center gap-2">
+            <Trash2 className="w-4 h-4" /> Clear All My Data
+          </button>
+          <p className="text-[10px] text-ink-500 text-center mt-2">DPDP 2023 Right to Erasure · GDPR Art. 17</p>
+        </Card>
+
+        <Card className="p-5">
+          <p className="font-display font-bold text-ink-900 mb-1">About</p>
+          <p className="text-xs text-ink-500">Perk Orbit · v1.0 · Built for Indian households.</p>
+        </Card>
+      </main>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center" data-testid="wipe-confirm-modal" onClick={() => !busy && setConfirmOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-10 h-10 rounded-full bg-terracotta-100 grid place-items-center"><AlertTriangle className="w-5 h-5 text-terracotta-700" /></div>
+              <h2 className="font-display text-xl font-bold text-ink-900">Delete everything?</h2>
+            </div>
+            <p className="text-sm text-ink-700 leading-relaxed mb-3">
+              This will permanently remove your account, vouchers, points, family circle, and history. It <span className="font-bold">cannot be undone</span>.
+            </p>
+            <p className="text-xs text-ink-600 mb-2">Type <span className="font-mono font-bold text-terracotta-700">DELETE</span> to confirm:</p>
+            <input data-testid="wipe-confirm-input" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoFocus
+              className="w-full bg-ink-50 border border-ink-200 rounded-2xl px-4 py-3 text-sm font-mono tracking-wider" placeholder="DELETE" />
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <GhostButton data-testid="wipe-cancel" onClick={() => setConfirmOpen(false)} disabled={busy}>Cancel</GhostButton>
+              <button data-testid="wipe-confirm" onClick={wipe}
+                disabled={busy || confirmText.trim().toUpperCase() !== 'DELETE'}
+                className="w-full bg-terracotta-700 text-white font-semibold py-3.5 rounded-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+                {busy ? 'Deleting…' : (<><Trash2 className="w-4 h-4" /> Delete</>)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}

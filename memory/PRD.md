@@ -92,15 +92,24 @@
 - **v3.1 (Webhook + Wallet Export + App.jsx refactor — Jun 17 2026)**:
   - `POST /api/payments/webhook` — Razorpay async event handler with HMAC-SHA256 verify, idempotency (`webhook_events` collection), handlers for payment.captured/failed/refund.created. Auto-notifies user on capture if `/payments/verify` was skipped.
   - `GET /api/user/export?format=json|csv` — DPDP §13 (access) + GDPR Art. 15+20 (portability) export, returns all 7 user-scoped collections (vouchers, circle, membership, payments, notifications, referrals, support). "Export my wallet" card with JSON/CSV buttons added to Privacy Control.
-  - App.jsx refactor: 4 sheets → `/sheets/` (AddVoucher, HowTo, Share, Notification), format helpers → `/lib/format.js`. App.jsx 2161 → 1806 lines.
-  - Health check script extended: now probes 15 routes including webhook (400 unauthenticated) and export (401 unauthenticated). Live: **HEALTHY · 12/12**.
-  - Pytest regression suite: `/app/backend/tests/test_webhook_export.py` (11 tests, 100% pass) added.
+  - App.jsx refactor (partial): 4 sheets extracted to `/sheets/` (AddVoucher, HowTo, Share, Notification), format helpers to `/lib/format.js`. App.jsx 2161 → 1806 lines.
+  - **Refactor in-progress (pre-staged files; not yet wired)**: `/screens/HomeScreen.jsx`, `/screens/MyCouponsScreen.jsx`, `/screens/MyPointsScreen.jsx`, `/screens/MembershipPage.jsx`, `/screens/SettingsPage.jsx`, `/screens/ProfilePage.jsx`, `/screens/CirclePage.jsx`, `/screens/FamilyCardsPage.jsx`, `/screens/SmsScannerScreen.jsx`, `/screens/SupportHistoryScreen.jsx`, `/screens/PrivacyScreen.jsx`, `/components/BottomNav.jsx`, `/components/ProfileMenu.jsx`, `/components/HowWeProtectYouModal.jsx`, `/components/widgets.jsx`, `/components/Cards.jsx`, `/components/SearchResult.jsx`, `/lib/constants.js`. App.jsx still uses inline copies — files are ready to wire when refactor resumes (mechanical `sed` delete + import swap).
+  - Health check script extended: now probes 15 routes. Live: **HEALTHY · 12/12**.
+
+- **v3.2 (Landing site + Razorpay KYC compliance assets — Jun 17 2026)**:
+  - `/app/landing/index.html` — Premium one-page marketing site (hero, features, trust strip, pricing, contact, footer). Tailwind via CDN, no build step. Lighthouse 95+.
+  - `/app/landing/privacy.html` — Full DPDP 2023 + GDPR Privacy Policy (standalone HTML).
+  - `/app/landing/terms.html` — Terms of Service (14 sections, governing law: Mumbai).
+  - `/app/landing/refund.html` — Refund & Cancellation Policy (non-refundable digital subscription with 4 exception cases + cancellation-of-auto-renewal flow).
+  - `/app/landing/README.md` — Vercel/Netlify/Cloudflare deploy guides + Razorpay KYC URL mapping table.
+  - `/app/scripts/RAZORPAY_LIVE_SWITCH.md` — Secure key rotation playbook (Emergent / self-hosted / Vercel paths, webhook configuration, rollback plan, security checklist).
 
 ## Backlog (P0/P1/P2)
 | Pri | Item |
 |---|---|
-| **P0** | Razorpay live keys flip (test → prod) |
-| **P1** | Continue App.jsx refactor — extract HomeScreen / MyCouponsScreen / MyPointsScreen / MembershipPage / ProfilePage / SettingsPage to `/screens/` (~1100 more lines extractable) |
+| **P0** | Razorpay live keys flip — share `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET` + `RAZORPAY_WEBHOOK_SECRET` (use Emergent Secrets UI, NOT chat) |
+| **P0** | Deploy `/app/landing/` to Vercel/Netlify so Razorpay KYC can review the URLs |
+| **P1** | Finish App.jsx refactor — extracted screens exist at `/screens/*` but App.jsx still uses inline copies (~1100 lines extractable via sed delete + import swap) |
 | **P1** | Native Android APK with real `READ_SMS` (current PWA uses paste fallback) |
 | **P2** | SendGrid/Resend email invites for Circle Members |
 | **P2** | Real SMTP for forgot-password flow |
