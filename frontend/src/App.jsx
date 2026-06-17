@@ -389,18 +389,18 @@ function FormField({ label, value, onChange, placeholder, testid, type = 'text',
 }
 
 // ---------- Smart Search Result ----------
-function SearchResult({ q }) {
+function SearchResult({ q, pin, onOpenVoucher }) {
   const [data, setData] = useState(null)
   useEffect(() => {
     if (!q.trim()) { setData(null); return }
     const id = setTimeout(() => {
-      SearchApi.brand(q.trim()).then(setData).catch(() => setData(null))
+      SearchApi.brand(q.trim(), pin).then(setData).catch(() => setData(null))
     }, 250)
     return () => clearTimeout(id)
-  }, [q])
+  }, [q, pin])
   if (!q.trim() || !data) return null
   return (
-    <div className="mt-3 bg-white border border-ink-200 rounded-2xl p-3 page-enter" data-testid="search-result">
+    <div className="mt-3 bg-white border border-ink-200 rounded-2xl p-3 page-enter space-y-3" data-testid="search-result">
       {data.parent_company ? (
         <div className="flex items-center justify-between">
           <div>
@@ -412,8 +412,31 @@ function SearchResult({ q }) {
       ) : (
         <p className="text-sm text-ink-500">No parent-company match. Try a brand like “Croma” or “Myntra”.</p>
       )}
+
+      {data.user_matches?.length ? (
+        <div className="pt-3 border-t border-ink-100" data-testid="search-user-matches">
+          <p className="text-[11px] text-ink-500 uppercase font-bold tracking-wider mb-2">Your coupons</p>
+          <div className="space-y-1.5">
+            {data.user_matches.slice(0, 4).map(u => (
+              <button
+                key={u.id}
+                data-testid={`user-match-${u.id}`}
+                onClick={() => onOpenVoucher?.(u)}
+                className="w-full flex items-center justify-between gap-2 p-2 rounded-xl hover:bg-ink-50 active:scale-[0.98] transition text-left"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-ink-900 truncate">{u.brand} <span className="text-ink-400 font-normal text-xs">· {u.parent_company || '—'}</span></p>
+                  <p className="text-[11px] text-ink-500 truncate">{u.title}</p>
+                </div>
+                {u.code ? <span className="code-box text-[10px]">{u.code}</span> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {data.matches?.length ? (
-        <div className="mt-3 pt-3 border-t border-ink-100 flex flex-wrap gap-1.5" data-testid="search-matches">
+        <div className="pt-3 border-t border-ink-100 flex flex-wrap gap-1.5" data-testid="search-matches">
           {data.matches.slice(0, 6).map((m, i) => (
             <span key={i} className="text-[11px] px-2 py-1 rounded-full bg-ink-100 text-ink-700">{m.brand} · {m.parent_company}</span>
           ))}
@@ -469,7 +492,7 @@ function HomeScreen({ pin, onProfileClick, memberStatus, onOpenAdd, toast, refre
               className="w-full bg-white border border-ink-200 rounded-full pl-11 pr-4 py-3 text-sm focus:border-emerald-700 focus:ring-2 focus:ring-emerald-200 transition"
             />
           </div>
-          <SearchResult q={q} />
+          <SearchResult q={q} pin={pin} onOpenVoucher={(u) => openHowTo(u)} />
         </section>
 
         {/* Membership / Pro banner */}
@@ -765,7 +788,7 @@ function MembershipPage({ onBack, pin, status, refresh, toast }) {
   )
 }
 
-function CirclePage({ onBack, pin, toast }) {
+function CirclePage({ onBack, pin, toast, onOpenMember }) {
   const [members, setMembers] = useState([])
   const [name, setName] = useState('')
   const [relation, setRelation] = useState('Family')
@@ -799,18 +822,86 @@ function CirclePage({ onBack, pin, toast }) {
           <div className="space-y-2" data-testid="circle-list">
             {members.map(m => (
               <Card key={m.id} className="p-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
+                <button
+                  data-testid={`open-family-cards-${m.id}`}
+                  onClick={() => onOpenMember(m)}
+                  className="flex items-center gap-3 min-w-0 flex-1 text-left active:scale-[0.99] transition"
+                >
                   <div className="w-11 h-11 rounded-full bg-emerald-100 grid place-items-center text-emerald-800 font-display font-bold">{m.name[0].toUpperCase()}</div>
                   <div className="min-w-0">
                     <p className="font-display font-bold text-ink-900 truncate">{m.name}</p>
-                    <p className="text-[11px] text-ink-500">{m.relation || 'Family'}</p>
+                    <p className="text-[11px] text-ink-500">{m.relation || 'Family'} · View their cards</p>
                   </div>
-                </div>
+                </button>
                 <div className="flex items-center gap-1">
                   <button data-testid={`copy-invite-${m.id}`} onClick={() => copyInvite(m)} className="w-9 h-9 rounded-full bg-ink-100 grid place-items-center text-ink-700 active:scale-95"><LinkIcon className="w-4 h-4" /></button>
                   <button data-testid={`remove-member-${m.id}`} onClick={() => remove(m.id)} className="w-9 h-9 rounded-full bg-terracotta-50 grid place-items-center text-terracotta-700 active:scale-95"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </Card>
+            ))}
+          </div>
+        )}
+      </main>
+    </>
+  )
+}
+
+// ---------- Family Cards (filtered: Where Shared_With == member.id) ----------
+function FamilyCardsPage({ onBack, pin, member, toast, refresh, openHowTo }) {
+  const [data, setData] = useState({ member, vouchers: [] })
+  const [loading, setLoading] = useState(true)
+
+  const load = () => {
+    setLoading(true)
+    Circle.sharedWith(pin, member.id).then(setData).finally(() => setLoading(false))
+  }
+  useEffect(() => { load() /* eslint-disable-next-line */ }, [pin, member.id])
+
+  const handleCopy = async (v) => { if (!v.code) return; try { await navigator.clipboard.writeText(v.code); toast(`Copied ${v.code}`) } catch { toast('Copy failed') } }
+  const handleUnshare = async (v) => {
+    await Circle.unshare(v.id, pin, member.id)
+    toast('Removed from this member')
+    load(); refresh?.()
+  }
+
+  return (
+    <>
+      <TopBar
+        title={member.name}
+        subtitle={`Family Cards · ${member.relation || 'Family'}`}
+        onBack={onBack}
+      />
+      <main className="px-5 space-y-4">
+        <Card className="p-4 flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-emerald-800 grid place-items-center text-white font-display text-lg font-bold">{member.name[0].toUpperCase()}</div>
+          <div className="min-w-0 flex-1">
+            <p className="font-display font-bold text-ink-900 leading-tight truncate">{member.name}</p>
+            <p className="text-[11px] text-ink-500">Showing vouchers where Shared_With = this member</p>
+          </div>
+          <Tag tone="emerald" data-testid="family-count">{data.vouchers?.length || 0} cards</Tag>
+        </Card>
+
+        {loading ? (
+          <div className="space-y-3">{[0, 1].map(i => <div key={i} className="h-24 bg-white rounded-3xl border border-ink-200 animate-pulse" />)}</div>
+        ) : (data.vouchers?.length || 0) === 0 ? (
+          <Empty
+            title="Nothing shared yet"
+            sub={`Share a voucher from My Coupons with ${member.name} to see it here.`}
+            icon={<Share2 className="w-6 h-6" />}
+            testid="empty-family-cards"
+          />
+        ) : (
+          <div className="space-y-3" data-testid="family-cards-list">
+            {data.vouchers.map(v => (
+              <VoucherCard
+                key={v.id}
+                v={v}
+                onCopy={handleCopy}
+                onHowTo={openHowTo}
+                onDelete={() => {}}
+                onShare={() => {}}
+                onUnshare={handleUnshare}
+              />
             ))}
           </div>
         )}
@@ -857,7 +948,7 @@ function ShareSheet({ open, onClose, voucher, pin, toast, refresh }) {
   const [members, setMembers] = useState([])
   useEffect(() => { if (open) Circle.list(pin).then(setMembers) }, [open, pin])
   const share = async (m) => {
-    await Circle.share({ user_pin: pin, voucher_id: voucher.id, family_member_name: m.name })
+    await Circle.share({ user_pin: pin, voucher_id: voucher.id, family_member_id: m.id })
     toast(`Shared with ${m.name}`); onClose(); refresh()
   }
   return (
@@ -901,7 +992,7 @@ export default function App() {
   const isTab = ['home', 'coupons', 'points'].includes(current.screen)
 
   const toast = (m) => { setToastMsg(m); setTimeout(() => setToastMsg(''), 2200) }
-  const push = (screen) => setStack(s => [...s, { screen }])
+  const push = (screen, params = {}) => setStack(s => [...s, { screen, params }])
   const pop = () => setStack(s => s.length > 1 ? s.slice(0, -1) : s)
   const switchTab = (screen) => setStack([{ screen }])
 
@@ -953,7 +1044,17 @@ export default function App() {
         {current.screen === 'profile' && (<ProfilePage onBack={pop} />)}
         {current.screen === 'settings' && (<SettingsPage onBack={pop} onResetPin={() => { setStoredPin(null); setPin(null) }} />)}
         {current.screen === 'membership' && (<MembershipPage onBack={pop} pin={pin} status={memberStatus} refresh={refreshMember} toast={toast} />)}
-        {current.screen === 'circle' && (<CirclePage onBack={pop} pin={pin} toast={toast} />)}
+        {current.screen === 'circle' && (<CirclePage onBack={pop} pin={pin} toast={toast} onOpenMember={(m) => push('family-cards', { member: m })} />)}
+        {current.screen === 'family-cards' && (
+          <FamilyCardsPage
+            onBack={pop}
+            pin={pin}
+            member={current.params.member}
+            toast={toast}
+            refresh={() => setRefreshKey(k => k + 1)}
+            openHowTo={setHowToFor}
+          />
+        )}
       </div>
 
       <ProfileMenu open={profileOpen} onClose={() => setProfileOpen(false)} onNavigate={handleNavigate} memberStatus={memberStatus} />

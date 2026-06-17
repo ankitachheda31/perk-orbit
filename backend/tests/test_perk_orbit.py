@@ -227,27 +227,130 @@ def test_circle_member_crud(session, cleanup):
     assert r.json()["deleted"] == 1
 
 
-def test_share_and_unshare(session, cleanup):
+def test_share_with_member_id_and_legacy_unshare(session, cleanup):
+    # add a member to share with
+    m = session.post(f"{API}/circle/members", json={
+        "user_pin": PIN, "name": "TEST_Priya", "relation": "Wife"
+    }).json()
+    mid = m["id"]
+
     v = session.post(f"{API}/vouchers", json={
         "user_pin": PIN, "brand": "TEST_Share", "title": "TEST share voucher",
         "category": "vouchers"
     }).json()
     vid = v["id"]
 
+    # share with member id
     r = session.post(f"{API}/circle/share", json={
-        "user_pin": PIN, "voucher_id": vid, "family_member_name": "TEST_Priya"
+        "user_pin": PIN, "voucher_id": vid, "family_member_id": mid
     })
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["is_sharing"] is True
-    assert "TEST_Priya" in data["shared_with"]
+    assert mid in data["shared_with"]  # ID stored, not name
+    assert "TEST_Priya" not in data["shared_with"]
 
+    # legacy unshare (no family_member_id) clears array
     r = session.post(f"{API}/circle/unshare/{vid}", params={"user_pin": PIN})
     assert r.status_code == 200
     data = r.json()
     assert data["is_sharing"] is False
     assert data["shared_with"] == []
+
+    # cleanup
     session.delete(f"{API}/vouchers/{vid}")
+    session.delete(f"{API}/circle/members/{mid}")
+
+
+def test_share_invalid_objectid_returns_400(session):
+    v = session.post(f"{API}/vouchers", json={
+        "user_pin": PIN, "brand": "TEST_BadShare", "title": "x", "category": "vouchers"
+    }).json()
+    r = session.post(f"{API}/circle/share", json={
+        "user_pin": PIN, "voucher_id": v["id"], "family_member_id": "not-an-objectid"
+    })
+    assert r.status_code == 400
+    session.delete(f"{API}/vouchers/{v['id']}")
+
+
+def test_share_unknown_member_returns_404(session):
+    v = session.post(f"{API}/vouchers", json={
+        "user_pin": PIN, "brand": "TEST_BadShare2", "title": "x", "category": "vouchers"
+    }).json()
+    # well-formed but non-existent ObjectId
+    r = session.post(f"{API}/circle/share", json={
+        "user_pin": PIN, "voucher_id": v["id"], "family_member_id": "507f1f77bcf86cd799439011"
+    })
+    assert r.status_code == 404
+    session.delete(f"{API}/vouchers/{v['id']}")
+
+
+def test_unshare_specific_member_only(session, cleanup):
+    m1 = session.post(f"{API}/circle/members", json={"user_pin": PIN, "name": "TEST_A1", "relation": "Family"}).json()
+    m2 = session.post(f"{API}/circle/members", json={"user_pin": PIN, "name": "TEST_A2", "relation": "Family"}).json()
+    v = session.post(f"{API}/vouchers", json={
+        "user_pin": PIN, "brand": "TEST_Multi", "title": "x", "category": "vouchers"
+    }).json()
+    vid = v["id"]
+
+    session.post(f"{API}/circle/share", json={"user_pin": PIN, "voucher_id": vid, "family_member_id": m1["id"]})
+    res = session.post(f"{API}/circle/share", json={"user_pin": PIN, "voucher_id": vid, "family_member_id": m2["id"]}).json()
+    assert set(res["shared_with"]) == {m1["id"], m2["id"]}
+
+    # unshare only m1
+    res = session.post(f"{API}/circle/unshare/{vid}", params={"user_pin": PIN, "family_member_id": m1["id"]}).json()
+    assert m1["id"] not in res["shared_with"]
+    assert m2["id"] in res["shared_with"]
+    assert res["is_sharing"] is True  # still shared with m2
+
+    # unshare m2 -> array empty, is_sharing False
+    res = session.post(f"{API}/circle/unshare/{vid}", params={"user_pin": PIN, "family_member_id": m2["id"]}).json()
+    assert res["shared_with"] == []
+    assert res["is_sharing"] is False
+
+    session.delete(f"{API}/vouchers/{vid}")
+    session.delete(f"{API}/circle/members/{m1['id']}")
+    session.delete(f"{API}/circle/members/{m2['id']}")
+
+
+def test_vouchers_shared_with_endpoint(session, cleanup):
+    m = session.post(f"{API}/circle/members", json={"user_pin": PIN, "name": "TEST_Filter", "relation": "Sibling"}).json()
+    v1 = session.post(f"{API}/vouchers", json={"user_pin": PIN, "brand": "TEST_F1", "title": "shared", "category": "vouchers"}).json()
+    v2 = session.post(f"{API}/vouchers", json={"user_pin": PIN, "brand": "TEST_F2", "title": "not shared", "category": "vouchers"}).json()
+    session.post(f"{API}/circle/share", json={"user_pin": PIN, "voucher_id": v1["id"], "family_member_id": m["id"]})
+
+    r = session.get(f"{API}/vouchers/shared-with", params={"user_pin": PIN, "member_id": m["id"]})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["member"]["id"] == m["id"]
+    assert data["member"]["name"] == "TEST_Filter"
+    assert data["member"]["relation"] == "Sibling"
+    ids = [x["id"] for x in data["vouchers"]]
+    assert v1["id"] in ids
+    assert v2["id"] not in ids
+
+    session.delete(f"{API}/vouchers/{v1['id']}")
+    session.delete(f"{API}/vouchers/{v2['id']}")
+    session.delete(f"{API}/circle/members/{m['id']}")
+
+
+def test_vouchers_shared_with_unknown_member_returns_404(session):
+    r = session.get(f"{API}/vouchers/shared-with", params={"user_pin": PIN, "member_id": "507f1f77bcf86cd799439011"})
+    assert r.status_code == 404
+
+
+def test_search_brand_includes_user_matches(session, cleanup):
+    v = session.post(f"{API}/vouchers", json={
+        "user_pin": PIN, "brand": "Swiggy", "title": "TEST FAMTEST",
+        "code": "FAMTEST", "category": "vouchers"
+    }).json()
+    r = session.get(f"{API}/search/brand", params={"q": "swiggy", "user_pin": PIN})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["parent_company"] == "Swiggy"
+    um_ids = [u["id"] for u in data.get("user_matches", [])]
+    assert v["id"] in um_ids
+    session.delete(f"{API}/vouchers/{v['id']}")
 
 
 # ---------- Membership activate / status ----------

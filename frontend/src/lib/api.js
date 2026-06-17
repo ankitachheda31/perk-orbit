@@ -27,7 +27,7 @@ export const Extract = {
 }
 
 export const Search = {
-  brand: (q) => api.get('/search/brand', { params: { q } }).then(r => r.data),
+  brand: (q, user_pin) => api.get('/search/brand', { params: { q, user_pin } }).then(r => r.data),
 }
 
 export const Circle = {
@@ -35,7 +35,8 @@ export const Circle = {
   add: (body) => api.post('/circle/members', body).then(r => r.data),
   remove: (id) => api.delete(`/circle/members/${id}`).then(r => r.data),
   share: (body) => api.post('/circle/share', body).then(r => r.data),
-  unshare: (voucher_id, user_pin) => api.post(`/circle/unshare/${voucher_id}`, null, { params: { user_pin } }).then(r => r.data),
+  unshare: (voucher_id, user_pin, family_member_id) => api.post(`/circle/unshare/${voucher_id}`, null, { params: { user_pin, family_member_id } }).then(r => r.data),
+  sharedWith: (pin, member_id) => api.get('/vouchers/shared-with', { params: { user_pin: pin, member_id } }).then(r => r.data),
 }
 
 export const Membership = {

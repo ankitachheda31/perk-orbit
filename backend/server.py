@@ -150,7 +150,7 @@ class OCRImageBase64Input(BaseModel):
 class ShareInviteCreate(BaseModel):
     user_pin: str
     voucher_id: str
-    family_member_name: str
+    family_member_id: str  # ID of the circle member from /api/circle/members
 
 
 class RewardCircleMember(BaseDocument):
@@ -433,10 +433,14 @@ async def points_summary(user_pin: str = Query(...)):
             total_points += pts
             breakdown.append(
                 {
+                    "program_name": d.get("brand"),
                     "brand": d.get("brand"),
                     "parent_company": d.get("parent_company"),
+                    "points_balance": pts,
                     "points": pts,
+                    "current_cash_value": round(pts * 0.25, 2),
                     "value": round(pts * 0.25, 2),
+                    "is_shared": bool(d.get("is_sharing", False)),
                 }
             )
             total_value += pts * 0.25
@@ -522,15 +526,48 @@ async def extract_image_upload(file: UploadFile = File(...)):
 
 # -------- Smart Search --------
 @api.get("/search/brand")
-async def search_brand(q: str = Query(...)):
+async def search_brand(q: str = Query(...), user_pin: Optional[str] = None):
+    """Searches both the global brand→parent dictionary AND the user's saved
+    vouchers (Brand_Name and Parent_Company fields)."""
+    ql = q.strip().lower()
     parent = lookup_parent(q)
-    # also list known brands matching
+
     matches = [
         {"brand": k.title(), "parent_company": v}
         for k, v in BRAND_PARENT_MAP.items()
-        if q.lower() in k or k in q.lower()
+        if ql in k or k in ql
     ][:8]
-    return {"query": q, "parent_company": parent, "matches": matches}
+
+    user_matches: list[dict] = []
+    if user_pin and ql:
+        cursor = db.vouchers.find(
+            {
+                "user_pin": user_pin,
+                "$or": [
+                    {"brand": {"$regex": ql, "$options": "i"}},
+                    {"parent_company": {"$regex": ql, "$options": "i"}},
+                ],
+            }
+        ).limit(10)
+        async for d in cursor:
+            user_matches.append(
+                {
+                    "id": str(d["_id"]),
+                    "brand": d.get("brand"),
+                    "parent_company": d.get("parent_company"),
+                    "title": d.get("title"),
+                    "code": d.get("code"),
+                    "expiry": d.get("expiry"),
+                    "category": d.get("category"),
+                }
+            )
+
+    return {
+        "query": q,
+        "parent_company": parent,
+        "matches": matches,
+        "user_matches": user_matches,
+    }
 
 
 # -------- Reward Circle --------
@@ -567,10 +604,18 @@ async def remove_circle_member(member_id: str):
 async def share_voucher(payload: ShareInviteCreate):
     if not ObjectId.is_valid(payload.voucher_id):
         raise HTTPException(status_code=400, detail="Invalid voucher id")
+    if not ObjectId.is_valid(payload.family_member_id):
+        raise HTTPException(status_code=400, detail="Invalid member id")
+    # validate that the member belongs to this user
+    member = await db.circle_members.find_one(
+        {"_id": ObjectId(payload.family_member_id), "user_pin": payload.user_pin}
+    )
+    if not member:
+        raise HTTPException(status_code=404, detail="Circle member not found")
     res = await db.vouchers.find_one_and_update(
         {"_id": ObjectId(payload.voucher_id), "user_pin": payload.user_pin},
         {
-            "$addToSet": {"shared_with": payload.family_member_name},
+            "$addToSet": {"shared_with": payload.family_member_id},
             "$set": {"is_sharing": True},
         },
         return_document=True,
@@ -581,17 +626,66 @@ async def share_voucher(payload: ShareInviteCreate):
 
 
 @api.post("/circle/unshare/{voucher_id}")
-async def stop_sharing(voucher_id: str, user_pin: str = Query(...)):
+async def stop_sharing(
+    voucher_id: str,
+    user_pin: str = Query(...),
+    family_member_id: Optional[str] = Query(None),
+):
+    """If family_member_id is provided, only that member is removed; otherwise
+    sharing is fully revoked (legacy 'Stop sharing' behaviour)."""
     if not ObjectId.is_valid(voucher_id):
         raise HTTPException(status_code=400, detail="Invalid id")
-    res = await db.vouchers.find_one_and_update(
-        {"_id": ObjectId(voucher_id), "user_pin": user_pin},
-        {"$set": {"is_sharing": False, "shared_with": []}},
-        return_document=True,
-    )
+
+    if family_member_id and ObjectId.is_valid(family_member_id):
+        res = await db.vouchers.find_one_and_update(
+            {"_id": ObjectId(voucher_id), "user_pin": user_pin},
+            {"$pull": {"shared_with": family_member_id}},
+            return_document=True,
+        )
+        if res and not res.get("shared_with"):
+            res = await db.vouchers.find_one_and_update(
+                {"_id": ObjectId(voucher_id)},
+                {"$set": {"is_sharing": False}},
+                return_document=True,
+            )
+    else:
+        res = await db.vouchers.find_one_and_update(
+            {"_id": ObjectId(voucher_id), "user_pin": user_pin},
+            {"$set": {"is_sharing": False, "shared_with": []}},
+            return_document=True,
+        )
     if not res:
         raise HTTPException(status_code=404, detail="Voucher not found")
     return _serialize(res)
+
+
+@api.get("/vouchers/shared-with")
+async def vouchers_shared_with(
+    user_pin: str = Query(...),
+    member_id: str = Query(...),
+):
+    """Family Cards view: returns vouchers from `user_pin`'s wallet whose
+    `shared_with` array contains `member_id` (Where Shared_With == Current_User_ID).
+    """
+    if not ObjectId.is_valid(member_id):
+        raise HTTPException(status_code=400, detail="Invalid member id")
+    member = await db.circle_members.find_one(
+        {"_id": ObjectId(member_id), "user_pin": user_pin}
+    )
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    cursor = db.vouchers.find(
+        {"user_pin": user_pin, "shared_with": member_id}
+    ).sort("created_at", -1)
+    items = [_serialize(d) async for d in cursor]
+    return {
+        "member": {
+            "id": str(member["_id"]),
+            "name": member["name"],
+            "relation": member.get("relation"),
+        },
+        "vouchers": items,
+    }
 
 
 # -------- Membership status (₹99 plan, mocked Razorpay) --------

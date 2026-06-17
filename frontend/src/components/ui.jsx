@@ -16,7 +16,7 @@ export function TopBar({ title, onBack, right, subtitle }) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           {onBack ? (
-            <button data-testid="back-button" onClick={onBack}
+            <button data-testid="topbar-back" onClick={onBack}
               className="w-10 h-10 rounded-full bg-white border border-ink-200 flex items-center justify-center active:scale-95 transition">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
@@ -62,14 +62,14 @@ export function GhostButton({ children, className = '', ...props }) {
   )
 }
 
-export function Tag({ children, tone = 'neutral' }) {
+export function Tag({ children, tone = 'neutral', ...rest }) {
   const tones = {
     neutral: 'bg-ink-100 text-ink-700',
     gold: 'bg-gold-100 text-gold-600',
     emerald: 'bg-emerald-100 text-emerald-700',
     warn: 'bg-terracotta-50 text-terracotta-700',
   }
-  return <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${tones[tone]}`}>{children}</span>
+  return <span {...rest} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${tones[tone]}`}>{children}</span>
 }
 
 export function ProgressBar({ value, tone = 'emerald' }) {
