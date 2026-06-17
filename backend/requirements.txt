@@ -6,3 +6,4 @@ python-dotenv==1.0.1
 emergentintegrations==0.2.0
 pillow==12.2.0
 python-multipart==0.0.9
+razorpay==2.0.1

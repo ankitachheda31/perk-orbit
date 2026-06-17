@@ -10,6 +10,8 @@ Provides:
 from __future__ import annotations
 
 import base64
+import hmac
+import hashlib
 import io
 import json
 import logging
@@ -26,6 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from PIL import Image
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+import razorpay
 
 load_dotenv()
 
@@ -38,9 +41,16 @@ log = logging.getLogger("perk_orbit")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 EMERGENT_LLM_KEY = os.environ["EMERGENT_LLM_KEY"]
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
+
+# Razorpay client (test mode)
+_rzp_client: Optional[razorpay.Client] = None
+if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
+    _rzp_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # ---------------------------------------------------------------------------
 # PyObjectId helper
@@ -719,6 +729,241 @@ async def activate_membership(user_pin: str = Query(...)):
         {"user_pin": user_pin}, {"$set": doc}, upsert=True
     )
     return doc
+
+
+# -------- Razorpay Payments (LIVE — test mode) --------
+class RzpOrderRequest(BaseModel):
+    user_pin: str
+    amount_inr: int = 99  # rupees; converted to paise
+
+
+class RzpVerifyRequest(BaseModel):
+    user_pin: str
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
+
+@api.post("/payments/order")
+async def create_payment_order(payload: RzpOrderRequest):
+    if not _rzp_client:
+        raise HTTPException(status_code=503, detail="Razorpay not configured")
+    receipt = f"perk-{secrets.token_hex(6)}"[:40]
+    try:
+        order = _rzp_client.order.create(
+            {
+                "amount": payload.amount_inr * 100,  # paise
+                "currency": "INR",
+                "receipt": receipt,
+                "payment_capture": 1,
+                "notes": {"user_pin": payload.user_pin, "plan": "perk-orbit-pro-6m"},
+            }
+        )
+    except Exception as e:
+        log.exception("Razorpay order create failed")
+        raise HTTPException(status_code=502, detail=f"Razorpay order failed: {e}")
+    # persist pending order
+    await db.payments.insert_one(
+        {
+            "user_pin": payload.user_pin,
+            "order_id": order["id"],
+            "amount": order["amount"],
+            "currency": order["currency"],
+            "status": "created",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    return {
+        "key_id": RAZORPAY_KEY_ID,
+        "order_id": order["id"],
+        "amount": order["amount"],
+        "currency": order["currency"],
+        "receipt": receipt,
+    }
+
+
+def _verify_razorpay_signature(order_id: str, payment_id: str, signature: str) -> bool:
+    """HMAC-SHA256(order_id + '|' + payment_id, key_secret) compared to signature."""
+    body = f"{order_id}|{payment_id}".encode("utf-8")
+    expected = hmac.new(
+        RAZORPAY_KEY_SECRET.encode("utf-8"), body, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+@api.post("/payments/verify")
+async def verify_payment(payload: RzpVerifyRequest):
+    if not _rzp_client:
+        raise HTTPException(status_code=503, detail="Razorpay not configured")
+    if not _verify_razorpay_signature(
+        payload.razorpay_order_id,
+        payload.razorpay_payment_id,
+        payload.razorpay_signature,
+    ):
+        await db.payments.update_one(
+            {"order_id": payload.razorpay_order_id},
+            {"$set": {"status": "signature_failed"}},
+        )
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    # Mark order paid
+    await db.payments.update_one(
+        {"order_id": payload.razorpay_order_id},
+        {
+            "$set": {
+                "status": "paid",
+                "payment_id": payload.razorpay_payment_id,
+                "verified_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
+
+    # Activate membership (6 months)
+    expires = (datetime.now(timezone.utc) + timedelta(days=183)).isoformat()
+    ref = f"PERK-{secrets.token_hex(3).upper()}"
+    doc = {
+        "user_pin": payload.user_pin,
+        "active": True,
+        "plan": "Perk Orbit Pro ₹99 / 6 months",
+        "expires_at": expires,
+        "referral_code": ref,
+        "activated_at": datetime.now(timezone.utc).isoformat(),
+        "last_payment_id": payload.razorpay_payment_id,
+        "last_order_id": payload.razorpay_order_id,
+    }
+    await db.app_membership.update_one(
+        {"user_pin": payload.user_pin}, {"$set": doc}, upsert=True
+    )
+
+    # Drop a notification
+    await db.notifications.insert_one(
+        {
+            "user_pin": payload.user_pin,
+            "kind": "membership_activated",
+            "title": "Welcome to Perk Orbit Pro",
+            "body": "Your ₹99 membership is active for 6 months. Tap to view benefits.",
+            "ref_screen": "membership",
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    return doc
+
+
+# -------- Notifications --------
+async def _generate_dynamic_notifications(user_pin: str) -> list[dict]:
+    """Compute ending-soon + ROI break-even alerts from current voucher data
+    and upsert them into the notifications collection so the bell is in sync
+    with reality on every fetch."""
+    today = datetime.now(timezone.utc).date()
+    cutoff = today + timedelta(days=7)
+    items: list[dict] = []
+
+    # Ending-soon vouchers (≤7 days)
+    async for v in db.vouchers.find(
+        {"user_pin": user_pin, "category": "vouchers"}
+    ):
+        exp = v.get("expiry")
+        if not exp:
+            continue
+        try:
+            exp_date = datetime.strptime(exp, "%Y-%m-%d").date()
+        except Exception:
+            continue
+        if today <= exp_date <= cutoff:
+            days_left = (exp_date - today).days
+            items.append(
+                {
+                    "user_pin": user_pin,
+                    "kind": "ending_soon",
+                    "ref_voucher_id": str(v["_id"]),
+                    "ref_screen": "coupons",
+                    "title": f"{v.get('brand', 'Voucher')} expires in {days_left} day{'s' if days_left != 1 else ''}",
+                    "body": v.get("title") or v.get("code") or "Tap to view",
+                    "priority": 1 if days_left <= 2 else 2,
+                }
+            )
+
+    # Asset memberships nearing break-even
+    async for m in db.vouchers.find(
+        {"user_pin": user_pin, "category": "memberships", "membership_kind": "asset"}
+    ):
+        fee = m.get("fee_paid") or 0
+        saved = m.get("savings_realized") or 0
+        if fee > 0 and saved >= fee:
+            items.append(
+                {
+                    "user_pin": user_pin,
+                    "kind": "break_even",
+                    "ref_voucher_id": str(m["_id"]),
+                    "ref_screen": "coupons",
+                    "title": f"{m.get('brand', 'Membership')} reached break-even",
+                    "body": f"You've saved ₹{int(saved)} on a ₹{int(fee)} fee — keep using.",
+                    "priority": 2,
+                }
+            )
+
+    # Upsert (idempotent by user_pin + kind + ref_voucher_id)
+    for n in items:
+        n["created_at"] = datetime.now(timezone.utc).isoformat()
+        await db.notifications.update_one(
+            {
+                "user_pin": n["user_pin"],
+                "kind": n["kind"],
+                "ref_voucher_id": n.get("ref_voucher_id"),
+            },
+            {"$setOnInsert": {**n, "read": False}},
+            upsert=True,
+        )
+    # Clean stale ending-soon for vouchers that no longer qualify
+    await db.notifications.delete_many(
+        {
+            "user_pin": user_pin,
+            "kind": "ending_soon",
+            "ref_voucher_id": {"$nin": [n["ref_voucher_id"] for n in items if n["kind"] == "ending_soon"]},
+        }
+    )
+    return items
+
+
+@api.get("/notifications")
+async def list_notifications(user_pin: str = Query(...)):
+    await _generate_dynamic_notifications(user_pin)
+    cursor = db.notifications.find({"user_pin": user_pin}).sort("created_at", -1).limit(50)
+    items = []
+    unread = 0
+    async for d in cursor:
+        d["id"] = str(d.pop("_id"))
+        if not d.get("read"):
+            unread += 1
+        items.append(d)
+    return {"items": items, "unread": unread}
+
+
+@api.post("/notifications/{notification_id}/read")
+async def mark_read(notification_id: str):
+    if not ObjectId.is_valid(notification_id):
+        raise HTTPException(status_code=400, detail="Invalid id")
+    await db.notifications.update_one(
+        {"_id": ObjectId(notification_id)}, {"$set": {"read": True}}
+    )
+    return {"ok": True}
+
+
+@api.post("/notifications/read-all")
+async def mark_all_read(user_pin: str = Query(...)):
+    res = await db.notifications.update_many(
+        {"user_pin": user_pin, "read": False}, {"$set": {"read": True}}
+    )
+    return {"updated": res.modified_count}
+
+
+@api.delete("/notifications/{notification_id}")
+async def delete_notification(notification_id: str):
+    if not ObjectId.is_valid(notification_id):
+        raise HTTPException(status_code=400, detail="Invalid id")
+    await db.notifications.delete_one({"_id": ObjectId(notification_id)})
+    return {"ok": True}
 
 
 app.include_router(api)

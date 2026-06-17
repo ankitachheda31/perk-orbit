@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Home, Ticket, Coins, Users, ChevronRight, Search, Plus, Sparkles, Copy, Clock, Share2, BadgeCheck, ArrowLeft, X, ScanLine, MessageSquareText, KeyRound, Trash2, Star, ShieldCheck, Camera, LinkIcon, UserPlus, Settings as SettingsIcon, LogOut, ChevronDown, Bell } from 'lucide-react'
 import { Card, GhostButton, PrimaryButton, ProgressBar, Sheet, Tag, TopBar, Shell, Empty, Toast } from './components/ui'
 import PinLock from './screens/PinLock'
-import { Vouchers, Points, Memberships, Search as SearchApi, Extract, Circle, Membership } from './lib/api'
+import { Vouchers, Points, Memberships, Search as SearchApi, Extract, Circle, Membership, Notifications } from './lib/api'
 import { getStoredPin, setStoredPin, getProfile, setProfile } from './lib/store'
+import { openRazorpayCheckout } from './lib/razorpay'
+
+const RAZORPAY_KEY_ID = import.meta.env.VITE_RAZORPAY_KEY_ID
 
 // ---------- Helpers ----------
 function daysUntil(iso) {
@@ -448,7 +451,7 @@ function SearchResult({ q, pin, onOpenVoucher }) {
 }
 
 // ---------- Home Screen ----------
-function HomeScreen({ pin, onProfileClick, memberStatus, onOpenAdd, toast, refreshKey, openHowTo }) {
+function HomeScreen({ pin, onProfileClick, memberStatus, onOpenAdd, toast, refreshKey, openHowTo, onOpenNotifs, unread }) {
   const [ending, setEnding] = useState([])
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
@@ -470,8 +473,11 @@ function HomeScreen({ pin, onProfileClick, memberStatus, onOpenAdd, toast, refre
         subtitle="Voucher-first wallet"
         right={
           <>
-            <button data-testid="bell-button" className="w-10 h-10 rounded-full bg-white border border-ink-200 grid place-items-center active:scale-95 transition">
+            <button data-testid="bell-button" onClick={onOpenNotifs} className="relative w-10 h-10 rounded-full bg-white border border-ink-200 grid place-items-center active:scale-95 transition">
               <Bell className="w-4 h-4 text-ink-700" />
+              {unread > 0 ? (
+                <span data-testid="bell-badge" className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-terracotta-600 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">{unread > 9 ? '9+' : unread}</span>
+              ) : null}
             </button>
             <button data-testid="profile-avatar" onClick={onProfileClick} className="w-10 h-10 rounded-full bg-emerald-800 grid place-items-center text-white font-display font-bold border-2 border-white shadow-soft">
               {(getProfile().name || 'M')[0].toUpperCase()}
@@ -741,10 +747,45 @@ function SettingsPage({ onBack, onResetPin }) {
 
 function MembershipPage({ onBack, pin, status, refresh, toast }) {
   const [busy, setBusy] = useState(false)
-  const activate = async () => {
+
+  const startCheckout = async () => {
     setBusy(true)
-    try { await Membership.activate(pin); await refresh(); toast('Welcome to Perk Orbit Pro!') } catch { toast('Activation failed') } finally { setBusy(false) }
+    try {
+      const order = await Membership.createOrder(pin, 99)
+      const profile = getProfile()
+      openRazorpayCheckout({
+        keyId: order.key_id || RAZORPAY_KEY_ID,
+        orderId: order.order_id,
+        amount: order.amount,
+        currency: order.currency,
+        prefill: {
+          name: profile.name || 'Perk Orbit Member',
+          email: profile.email || '',
+          contact: profile.phone || '',
+        },
+        onSuccess: async (resp) => {
+          try {
+            await Membership.verifyPayment({
+              user_pin: pin,
+              razorpay_order_id: resp.razorpay_order_id,
+              razorpay_payment_id: resp.razorpay_payment_id,
+              razorpay_signature: resp.razorpay_signature,
+            })
+            await refresh()
+            toast('Welcome to Perk Orbit Pro!')
+          } catch (e) {
+            toast('Payment verification failed')
+          } finally { setBusy(false) }
+        },
+        onDismiss: () => { setBusy(false); toast('Payment cancelled') },
+        onFailure: () => { setBusy(false); toast('Payment failed') },
+      })
+    } catch (e) {
+      setBusy(false)
+      toast('Could not start checkout')
+    }
   }
+
   const shareRef = async () => {
     const link = `https://perkorbit.app/?ref=${status?.referral_code}`
     try { await navigator.clipboard.writeText(link); toast('Referral link copied') } catch { toast('Copy failed') }
@@ -778,10 +819,10 @@ function MembershipPage({ onBack, pin, status, refresh, toast }) {
                 <li key={t} className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-gold-300" /> {t}</li>
               ))}
             </ul>
-            <PrimaryButton data-testid="activate-pro" onClick={activate} disabled={busy} className="mt-5 bg-gold-500 hover:bg-gold-600 shadow-none">
-              {busy ? 'Activating…' : 'Start ₹99 plan'}
+            <PrimaryButton data-testid="activate-pro" onClick={startCheckout} disabled={busy} className="mt-5 bg-gold-500 hover:bg-gold-600 shadow-none">
+              {busy ? 'Opening checkout…' : 'Pay ₹99 with Razorpay'}
             </PrimaryButton>
-            <p className="text-center text-[10px] text-white/60 mt-3">Razorpay test mode — no real charge</p>
+            <p className="text-center text-[10px] text-white/60 mt-3">Razorpay test mode · UPI / Card / NetBanking</p>
           </Card>
         )}
       </main>
@@ -920,7 +961,87 @@ function FamilyCardsPage({ onBack, pin, member, toast, refresh, openHowTo }) {
   )
 }
 
-// ---------- How To Redeem Sheet ----------
+// ---------- Notification Center ----------
+function NotificationSheet({ open, onClose, pin, toast, onJumpToScreen, refreshNotifs }) {
+  const [data, setData] = useState({ items: [], unread: 0 })
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    setLoading(true)
+    try { setData(await Notifications.list(pin)) } catch { /* ignore */ } finally { setLoading(false) }
+  }
+  useEffect(() => { if (open) load() /* eslint-disable-next-line */ }, [open, pin])
+
+  const markRead = async (n) => {
+    if (!n.read) {
+      await Notifications.markRead(n.id)
+      load(); refreshNotifs?.()
+    }
+  }
+  const handleJump = async (n) => {
+    await markRead(n)
+    onJumpToScreen?.(n.ref_screen || 'home')
+    onClose()
+  }
+  const markAll = async () => {
+    await Notifications.markAllRead(pin)
+    load(); refreshNotifs?.()
+    toast('All marked as read')
+  }
+  const remove = async (id) => {
+    await Notifications.remove(id)
+    load(); refreshNotifs?.()
+  }
+
+  const iconFor = (k) => {
+    if (k === 'ending_soon') return <Clock className="w-4 h-4 text-terracotta-700" />
+    if (k === 'break_even') return <BadgeCheck className="w-4 h-4 text-emerald-700" />
+    if (k === 'membership_activated') return <Star className="w-4 h-4 text-gold-500" />
+    return <Bell className="w-4 h-4 text-ink-600" />
+  }
+  const bgFor = (k) => {
+    if (k === 'ending_soon') return 'bg-terracotta-50'
+    if (k === 'break_even') return 'bg-emerald-50'
+    if (k === 'membership_activated') return 'bg-gold-50'
+    return 'bg-ink-100'
+  }
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Notifications" testid="notif-sheet">
+      {data.unread > 0 ? (
+        <button data-testid="notif-mark-all" onClick={markAll} className="text-xs font-semibold text-emerald-800 mb-3 active:scale-95">Mark all as read</button>
+      ) : null}
+
+      {loading ? (
+        <div className="space-y-3">{[0,1,2].map(i => <div key={i} className="h-16 bg-ink-100 rounded-2xl animate-pulse" />)}</div>
+      ) : data.items.length === 0 ? (
+        <Empty title="You're all caught up" sub="We'll ping you when vouchers are about to expire." icon={<Bell className="w-6 h-6" />} testid="empty-notifs" />
+      ) : (
+        <div className="space-y-2" data-testid="notif-list">
+          {data.items.map(n => (
+            <div
+              key={n.id}
+              data-testid={`notif-${n.id}`}
+              className={`relative rounded-2xl p-3 border ${n.read ? 'border-ink-200 bg-white' : 'border-emerald-200 bg-emerald-50/40'} flex items-start gap-3`}
+            >
+              <button onClick={() => handleJump(n)} className="flex items-start gap-3 flex-1 text-left">
+                <div className={`w-9 h-9 rounded-full grid place-items-center ${bgFor(n.kind)}`}>{iconFor(n.kind)}</div>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm leading-tight ${n.read ? 'text-ink-700' : 'font-bold text-ink-900'}`}>{n.title}</p>
+                  {n.body ? <p className="text-[11px] text-ink-500 mt-0.5 line-clamp-2">{n.body}</p> : null}
+                </div>
+                {!n.read ? <span className="w-2 h-2 rounded-full bg-emerald-700 mt-2 shrink-0" /> : null}
+              </button>
+              <button data-testid={`notif-del-${n.id}`} onClick={() => remove(n.id)} className="w-7 h-7 rounded-full bg-ink-100 grid place-items-center text-ink-500 hover:text-terracotta-700 active:scale-95">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Sheet>
+  )
+}
 function HowToSheet({ voucher, open, onClose }) {
   return (
     <Sheet open={open} onClose={onClose} title="How to redeem" testid="howto-sheet">
@@ -997,6 +1118,8 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState('')
   const [memberStatus, setMemberStatus] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [notifsOpen, setNotifsOpen] = useState(false)
+  const [unread, setUnread] = useState(0)
 
   const current = stack[stack.length - 1]
   const isTab = ['home', 'coupons', 'points', 'circle'].includes(current.screen)
@@ -1012,6 +1135,18 @@ export default function App() {
   }
 
   useEffect(() => { if (pin && !locked) refreshMember() /* eslint-disable-next-line */ }, [pin, locked])
+
+  const refreshNotifs = async () => {
+    if (!pin) return
+    try { const d = await Notifications.list(pin); setUnread(d.unread || 0) } catch { /* ignore */ }
+  }
+  useEffect(() => {
+    if (!pin || locked) return
+    refreshNotifs()
+    const t = setInterval(refreshNotifs, 60000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pin, locked, refreshKey])
 
   // Hardware back button
   useEffect(() => {
@@ -1043,7 +1178,17 @@ export default function App() {
       {/* Page content */}
       <div key={current.screen} className="page-enter">
         {current.screen === 'home' && (
-          <HomeScreen pin={pin} memberStatus={memberStatus} onProfileClick={() => setProfileOpen(true)} onOpenAdd={onOpenAdd} toast={toast} refreshKey={refreshKey} openHowTo={setHowToFor} />
+          <HomeScreen
+            pin={pin}
+            memberStatus={memberStatus}
+            onProfileClick={() => setProfileOpen(true)}
+            onOpenAdd={onOpenAdd}
+            toast={toast}
+            refreshKey={refreshKey}
+            openHowTo={setHowToFor}
+            onOpenNotifs={() => setNotifsOpen(true)}
+            unread={unread}
+          />
         )}
         {current.screen === 'coupons' && (
           <MyCouponsScreen pin={pin} onProfileClick={() => setProfileOpen(true)} onOpenAdd={onOpenAdd} toast={toast} refreshKey={refreshKey} openHowTo={setHowToFor} openShareSheet={setShareFor} setRefreshKey={setRefreshKey} />
@@ -1079,6 +1224,17 @@ export default function App() {
       <AddVoucherSheet open={addOpen} onClose={() => setAddOpen(false)} pin={pin} onSaved={() => setRefreshKey(k => k + 1)} toast={toast} />
       <HowToSheet voucher={howToFor} open={!!howToFor} onClose={() => setHowToFor(null)} />
       <ShareSheet open={!!shareFor} onClose={() => setShareFor(null)} voucher={shareFor} pin={pin} toast={toast} refresh={() => setRefreshKey(k => k + 1)} />
+      <NotificationSheet
+        open={notifsOpen}
+        onClose={() => setNotifsOpen(false)}
+        pin={pin}
+        toast={toast}
+        onJumpToScreen={(screen) => {
+          if (['home','coupons','points','circle'].includes(screen)) switchTab(screen)
+          else if (screen === 'membership') push('membership')
+        }}
+        refreshNotifs={refreshNotifs}
+      />
 
       <Toast message={toastMsg} />
       {isTab && <BottomNav active={current.screen} onChange={switchTab} />}

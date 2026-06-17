@@ -42,6 +42,16 @@ export const Circle = {
 export const Membership = {
   status: (pin) => api.get('/membership/status', { params: { user_pin: pin } }).then(r => r.data),
   activate: (pin) => api.post('/membership/activate', null, { params: { user_pin: pin } }).then(r => r.data),
+  // Real Razorpay flow
+  createOrder: (pin, amount_inr = 99) => api.post('/payments/order', { user_pin: pin, amount_inr }).then(r => r.data),
+  verifyPayment: (body) => api.post('/payments/verify', body).then(r => r.data),
+}
+
+export const Notifications = {
+  list: (pin) => api.get('/notifications', { params: { user_pin: pin } }).then(r => r.data),
+  markRead: (id) => api.post(`/notifications/${id}/read`).then(r => r.data),
+  markAllRead: (pin) => api.post('/notifications/read-all', null, { params: { user_pin: pin } }).then(r => r.data),
+  remove: (id) => api.delete(`/notifications/${id}`).then(r => r.data),
 }
 
 export default api
