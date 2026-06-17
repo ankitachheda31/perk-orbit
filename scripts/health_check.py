@@ -193,6 +193,10 @@ ROUTES_TO_PROBE = [
     ("GET", "/api/referrals/stats?user_pin=__probe__", {200}, "Referral stats"),
     ("GET", "/api/optimizer/tips?user_pin=__probe__&use_llm_fallback=false", {200}, "Optimizer tips"),
     ("GET", "/api/intelligence/programs?limit=5", {200}, "Intelligence programs"),
+    # Endpoints that REQUIRE auth — 401 is the expected "healthy" response without a token.
+    ("GET", "/api/user/export", {401}, "User export (auth required)"),
+    # Webhook should reject unsigned request with 400.
+    ("POST", "/api/payments/webhook", {400}, "Payment webhook (sig required)"),
 ]
 
 

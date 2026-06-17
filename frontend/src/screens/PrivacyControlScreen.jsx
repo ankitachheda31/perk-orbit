@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { ScanLine, MessageSquareText, Camera, Bell, ShieldCheck, Trash2, AlertTriangle, ChevronRight } from 'lucide-react'
+import { ScanLine, MessageSquareText, Camera, Bell, ShieldCheck, Trash2, AlertTriangle, ChevronRight, Download } from 'lucide-react'
 import { Card, GhostButton, TopBar } from '../components/ui'
+import { Auth } from '../lib/api'
 
 // Stored as JSON in localStorage under "perk_orbit_privacy_prefs"
 // Defaults are intentionally privacy-friendly: scanning OFF by default.
@@ -53,10 +54,21 @@ function PrefRow({ icon: Icon, title, body, checked, onChange, testid }) {
   )
 }
 
-export default function PrivacyControlScreen({ onBack, onOpenProtect, onOpenFAQ, onOpenPrivacy, onWipeOpen }) {
+export default function PrivacyControlScreen({ onBack, onOpenProtect, onOpenFAQ, onOpenPrivacy, onWipeOpen, toast }) {
   const [prefs, setPrefs] = useState(getPrivacyPrefs())
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => { setPrivacyPrefs(prefs) }, [prefs])
+
+  const exportData = async (format) => {
+    setExporting(true)
+    try {
+      await Auth.exportData(format)
+      toast?.(`Wallet exported as ${format.toUpperCase()}`)
+    } catch (e) {
+      toast?.('Export failed · try again')
+    } finally { setExporting(false) }
+  }
 
   return (
     <>
@@ -121,6 +133,34 @@ export default function PrivacyControlScreen({ onBack, onOpenProtect, onOpenFAQ,
             <span className="text-sm font-semibold text-ink-800 inline-flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-emerald-800" /> Full Privacy Policy</span>
             <ChevronRight className="w-4 h-4 text-ink-400" />
           </button>
+        </Card>
+
+        <Card className="p-5" data-testid="export-card">
+          <div className="flex items-center gap-2 mb-2">
+            <Download className="w-4 h-4 text-emerald-800" />
+            <p className="font-display font-bold text-ink-900">Export my wallet</p>
+          </div>
+          <p className="text-xs text-ink-600 leading-relaxed mb-3">
+            Download a copy of everything we hold for you — DPDP 2023 §13 (access) &amp; GDPR Art. 15 + 20 (portability). Choose JSON for re-import to another wallet, or CSV for spreadsheets.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              data-testid="export-json"
+              onClick={() => exportData('json')}
+              disabled={exporting}
+              className="w-full bg-emerald-800 text-white font-semibold py-3 rounded-full disabled:opacity-50 inline-flex items-center justify-center gap-2 active:scale-95 transition"
+            >
+              <Download className="w-4 h-4" /> JSON
+            </button>
+            <button
+              data-testid="export-csv"
+              onClick={() => exportData('csv')}
+              disabled={exporting}
+              className="w-full bg-white border border-ink-200 text-ink-800 font-semibold py-3 rounded-full hover:bg-ink-50 disabled:opacity-50 inline-flex items-center justify-center gap-2 active:scale-95 transition"
+            >
+              <Download className="w-4 h-4" /> CSV
+            </button>
+          </div>
         </Card>
 
         <Card className="p-5 border-terracotta-200 bg-terracotta-50/30" data-testid="pc-danger">

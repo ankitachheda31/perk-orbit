@@ -19,6 +19,18 @@ export const Auth = {
   logout: () => api.post('/auth/logout').then(r => r.data),
   claimPin: (pin) => api.post('/auth/claim-pin', { pin }).then(r => r.data),
   wipe: () => api.post('/auth/wipe').then(r => r.data),
+  // DPDP §13 / GDPR Art.15+20 self-service export → triggers a file download.
+  exportData: async (format = 'json') => {
+    const r = await api.get('/user/export', { params: { format }, responseType: 'blob' })
+    const blob = new Blob([r.data], { type: format === 'json' ? 'application/json' : 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    a.download = `perk-orbit-export-${ts}.${format}`
+    document.body.appendChild(a); a.click(); a.remove()
+    URL.revokeObjectURL(url)
+  },
 }
 
 export const Intelligence = {

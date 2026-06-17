@@ -1104,12 +1104,14 @@ async def referral_stats(user_pin: str = Query(...)):
 app.include_router(api)
 
 # Auth + Market Intelligence (cloud sync + daily program-change cron)
-from auth_intel import build_auth_router, build_intelligence_router, start_intelligence_cron, seed_programs
+from auth_intel import build_auth_router, build_intelligence_router, start_intelligence_cron, seed_programs, make_get_current_user
 from optimizer import build_optimizer_router
+from webhook_export import build_webhook_router
 
 app.include_router(build_auth_router(db))
 app.include_router(build_intelligence_router(db, EMERGENT_LLM_KEY))
 app.include_router(build_optimizer_router(db, EMERGENT_LLM_KEY))
+app.include_router(build_webhook_router(db, make_get_current_user(db)))
 
 
 @app.on_event("startup")
