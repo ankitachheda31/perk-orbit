@@ -26,6 +26,39 @@ export async function openRazorpayCheckout({ keyId, orderId, amount, currency, u
     order_id: orderId,
     prefill: prefill || {},
     theme: { color: '#064E3B' },
+    // Force a custom block order so the "Enter UPI ID" field (UPI Collect) is
+    // always visible at the top, then Card, then the rest. Razorpay's default
+    // behaviour on mobile only shows the UPI QR/Intent block which hides the
+    // typeable VPA input — this config makes the VPA input appear on every
+    // platform (incl. desktop test mode where the QR is non-functional).
+    config: {
+      display: {
+        blocks: {
+          upi_collect: {
+            name: 'Pay using UPI ID',
+            instruments: [
+              { method: 'upi', flows: ['collect'] },
+            ],
+          },
+          card_pay: {
+            name: 'Pay using a card',
+            instruments: [
+              { method: 'card' },
+            ],
+          },
+          other: {
+            name: 'Other ways to pay',
+            instruments: [
+              { method: 'upi', flows: ['intent', 'qr'] },
+              { method: 'netbanking' },
+              { method: 'wallet' },
+            ],
+          },
+        },
+        sequence: ['block.upi_collect', 'block.card_pay', 'block.other'],
+        preferences: { show_default_blocks: false },
+      },
+    },
     modal: {
       ondismiss: () => { onDismiss && onDismiss() },
     },
