@@ -60,7 +60,13 @@ async def send_email(
         params["text"] = text
     try:
         result = await asyncio.to_thread(resend.Emails.send, params)
-        log.info("Email sent to=%s id=%s subject=%r", to, result.get("id"), subject)
+        # Resend SDK 2.x can return either a dict or an object with .id — handle both defensively
+        rid = None
+        if isinstance(result, dict):
+            rid = result.get("id")
+        else:
+            rid = getattr(result, "id", None)
+        log.info("Email sent to=%s id=%s subject=%r", to, rid, subject)
         return True
     except Exception as e:
         log.error("Resend send failure to=%s subject=%r err=%s", to, subject, e)
