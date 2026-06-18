@@ -39,7 +39,12 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false)
   const [authUser, setAuthUser] = useState(null)
   const [pin, setPin] = useState(getStoredPin())
-  const [locked, setLocked] = useState(true)
+  // Persist unlock state in sessionStorage so hard refreshes (Ctrl+Shift+R)
+  // during development / payment testing don't re-prompt for the PIN. The
+  // session ends when the tab is closed — same security model as banking apps.
+  const [locked, setLocked] = useState(() => {
+    try { return sessionStorage.getItem('perk_orbit_unlocked') !== '1' } catch { return true }
+  })
   const [stack, setStack] = useState([{ screen: 'home', params: {} }])
   const [profileOpen, setProfileOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
@@ -125,6 +130,15 @@ export default function App() {
     })()
     return () => { alive = false }
   }, [])
+
+  // Mirror lock state into sessionStorage so refreshes don't re-prompt PIN
+  // until the user explicitly locks (Profile → Lock) or closes the tab.
+  useEffect(() => {
+    try {
+      if (locked) sessionStorage.removeItem('perk_orbit_unlocked')
+      else sessionStorage.setItem('perk_orbit_unlocked', '1')
+    } catch { /* private-mode browsers */ }
+  }, [locked])
 
   // ----- Auth / PIN / Walkthrough gates -----
   if (!authChecked) return null
