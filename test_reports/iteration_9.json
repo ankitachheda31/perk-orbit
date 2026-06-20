@@ -1,0 +1,77 @@
+{
+  "summary": "Iteration 9 — Production smoke test against https://perkworth.com/ and https://perkworth.app/. KYC URLs (landing/privacy/terms/refund) are 100% live with correct PerkWorth branding, ₹99 pricing, and 'subscription' keyword — Razorpay reviewers are unblocked. HOWEVER, the production SPA is currently NON-FUNCTIONAL beyond the PIN screen: REACT_APP_BACKEND_URL resolves to the literal string 'undefined' in the Vercel build, so every API call hits https://www.perkworth.com/undefined/api/... which returns the SPA index.html (200 HTML), then the React code crashes with 'f.map is not a function' and the screen goes blank. Login, signup, voucher creation, and membership flows COULD NOT be tested because there is no path through the broken bootstrap.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "OPTIONS / GET /api/auth/login (and all /api/*)", "issue": "Edge/ingress returns 'access-control-allow-origin: *' together with 'access-control-allow-credentials: true'. Browsers REJECT this combination for credentialed (cookie) requests. Once REACT_APP_BACKEND_URL is fixed, login will still fail in the browser because fetch uses credentials:'include'. Backend code at /app/backend/server.py:345 may be setting explicit origins but the ingress (Cloudflare/k8s) is rewriting ACAO to '*'. Needs investigation at proxy layer.", "priority": "HIGH"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Vercel production build (vite)", "issue": "REACT_APP_BACKEND_URL is undefined in the built bundle. All fetches resolve to 'https://www.perkworth.com/undefined/api/...' which is rewritten by vercel.json to index.html → 200 HTML → JSON.parse / .map crashes the app.", "selector": "any /api/* fetch", "priority": "CRITICAL"},
+      {"component": "App after walkthrough-skip", "issue": "Uncaught pageerror: 'f.map is not a function' → root unmounts → blank cream-colored screen. Caused by the undefined backend URL above (API returns HTML instead of array).", "selector": "[id='root']", "priority": "CRITICAL"},
+      {"component": "PinLock screen / app entry", "issue": "On a fresh device the user lands directly on 'Set a 4-digit PIN' with NO visible link to 'Sign in' or 'Create account'. The legacy AuthScreen.jsx is unreachable. Flow goes: PIN-set → PIN-confirm → Walkthrough → (white screen). The review request expected login/signup to be presented first.", "selector": "[data-testid='pin-screen']", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Login with test@perkorbit.app / Perk@1234", "issue": "Unable to execute — no auth screen reachable from production UI; even if reached, fetch URL is /undefined/api/auth/login.", "affected_selectors": ["[data-testid='login-email']", "[data-testid='login-password']", "[data-testid='login-submit']"]},
+      {"flow": "Signup (Create an account)", "issue": "Unable to execute — Create-account UI unreachable on production build.", "affected_selectors": ["[data-testid='signup-toggle']"]},
+      {"flow": "Add Voucher sheet", "issue": "App crashes to blank screen before reaching home; sheet cannot be opened.", "affected_selectors": ["[data-testid='add-voucher-btn']"]},
+      {"flow": "Membership page / Razorpay button", "issue": "App crashes before membership page is reachable; Razorpay button presence could not be verified on production.", "affected_selectors": ["[data-testid='razorpay-pay-btn']"]}
+    ],
+    "design_issues": [
+      {"screen": "Mobile 375px", "issues": ["PASS — no horizontal scroll detected on perkworth.com or perkworth.app; PIN keypad lays out cleanly."]}
+    ]
+  },
+  "kyc_url_check": {
+    "https://perkworth.com/landing.html": "308→https://www.perkworth.com/landing.html 200 (22055 bytes) · PerkWorth×10 · ₹99×6 · 0 brand leaks",
+    "https://perkworth.com/privacy.html": "200 (7560 bytes) · PerkWorth×10 · 0 brand leaks",
+    "https://perkworth.com/terms.html":   "200 (7677 bytes) · PerkWorth×16 · subscription×3 (1 Subscription + 2 subscription) · 0 brand leaks",
+    "https://perkworth.com/refund.html":  "200 (6332 bytes) · PerkWorth×10 · 0 brand leaks",
+    "https://perkworth.com/":             "308→https://www.perkworth.com/ 200 · title 'PerkWorth — Voucher-First Wallet'",
+    "https://perkworth.app/":             "308→https://www.perkworth.app/ 200 · identical SPA to perkworth.com"
+  },
+  "test_report_links": [],
+  "tests_passed": [
+    "KYC: https://perkworth.com/landing.html — 200, PerkWorth branding, ₹99 visible, 0 PerkOrbit leaks",
+    "KYC: https://perkworth.com/privacy.html — 200, PerkWorth branding, 0 leaks",
+    "KYC: https://perkworth.com/terms.html — 200, contains 'subscription' (case-insensitive ×3), 0 leaks",
+    "KYC: https://perkworth.com/refund.html — 200, PerkWorth branding, 0 leaks",
+    "Mirror: https://perkworth.app/ loads identical SPA with title 'PerkWorth — Voucher-First Wallet'",
+    "No 'Perk Orbit' / 'PerkOrbit' / 'perkorbit' strings detected in any user-visible HTML on landing/privacy/terms/refund/SPA",
+    "Mobile 375px viewport: scrollWidth==clientWidth==375 on both perkworth.com and perkworth.app — no horizontal scroll",
+    "CORS preflight: OPTIONS /api/auth/login from Origin: https://perkworth.com → 204",
+    "Cookie login via curl (Origin: www.perkworth.com): backend issues access_token + refresh_token correctly (SameSite=None; Secure; HttpOnly) — backend itself is healthy"
+  ],
+  "tests_failed": [
+    "Production app boot: fetch(/api/auth/me) actually hits /undefined/api/auth/me — REACT_APP_BACKEND_URL is the literal string 'undefined' in the bundle",
+    "Production app after walkthrough: pageerror 'f.map is not a function' → root unmounts → blank screen",
+    "Login flow: AuthScreen unreachable from production entry path (PIN screen is shown first with no Sign-in link)",
+    "Signup, Add Voucher, Membership/Razorpay button presence: all blocked by the blank-screen crash"
+  ],
+  "action_items": [
+    "[BLOCKING] Configure the missing env var in the Vercel project. The Vite build (vercel.json framework:vite, buildCommand: yarn build) needs the backend URL to be exposed to the client. Options: (a) set VITE_BACKEND_URL=https://orbit-vouchers.preview.emergentagent.com in Vercel → /app/frontend/src/lib/api.js already prefers this var; (b) set REACT_APP_BACKEND_URL on Vercel AND keep vite.config.js's define block. Either one alone will work — currently NEITHER is set so loadEnv() returns undefined and the bundle inlines `undefined`. Also update AddVoucherSheet.jsx (lines 41/141/262) to prefer import.meta.env.VITE_BACKEND_URL like lib/api.js does.",
+    "[BLOCKING] Fix the ingress/edge CORS config to echo back the request Origin (perkworth.com / www.perkworth.com / perkworth.app / www.perkworth.app) instead of '*' when Access-Control-Allow-Credentials:true is sent. Right now the combination is invalid per spec — browsers will silently drop responses for credentialed fetches. Check /app/backend/server.py:345 (CORS_ORIGINS / CORS_ORIGIN_REGEX) AND the k8s/Cloudflare ingress to ensure the proxy isn't overwriting ACAO to '*'.",
+    "[HIGH] After the env-var fix, verify the boot order: today PinLock renders before AuthScreen. The review-request flow expects login/signup screen first; either route to AuthScreen when /api/auth/me is unauthenticated, or surface a 'Already have an account? Sign in' link on the PinLock screen (per AuthScreen.jsx contract). Otherwise existing users on a new device cannot reach the login form.",
+    "[HIGH] Add explicit error handling on /api/auth/me, /api/membership/status, /api/notifications, /api/vouchers/ending-soon — when the response is non-2xx OR Content-Type is not JSON, do NOT call .map() on the body. Today this causes the blank-screen crash (TypeError: f.map is not a function).",
+    "[MED] Once redeployed, re-run this iteration end-to-end: login → PIN → home → Add Voucher → Membership/Razorpay button."
+  ],
+  "critical_code_review_comments": [
+    "vite.config.js: define { 'process.env.REACT_APP_BACKEND_URL': JSON.stringify(env.REACT_APP_BACKEND_URL) } — JSON.stringify(undefined) returns the string 'undefined' (NOT the JS undefined literal), so the bundle gets `process.env.REACT_APP_BACKEND_URL = undefined` inlined and concatenated as 'undefined/api/...'. Add a sane fallback at build time (e.g. throw if env not set, or default to '' so the URL becomes /api/...).",
+    "/app/frontend/src/lib/api.js: prefers VITE_BACKEND_URL; but /app/frontend/src/sheets/AddVoucherSheet.jsx still uses process.env.REACT_APP_BACKEND_URL only. Iter-8 note about this file was directionally correct — please switch AddVoucherSheet to import.meta.env.VITE_BACKEND_URL || process.env.REACT_APP_BACKEND_URL for parity.",
+    "vercel.json rewrites: { source: '/((?!api/).*)', destination: '/index.html' } — the negative-lookahead only excludes paths that LITERALLY start with /api/. /undefined/api/auth/me does not start with /api/, so it gets rewritten to index.html and the SPA receives HTML where it expects JSON. Once the env var is fixed this becomes moot, but consider also rewriting unknown /api/* to a 404 JSON for safety.",
+    "PinLock comes BEFORE AuthScreen in the boot graph. For a fresh device that already has a cloud account, the user is forced to set a NEW device PIN before being given any chance to sign in. The PIN-claim flow at the signup endpoint suggests the design intent is: signup-with-PIN, then re-use the PIN to claim on new device — but there is no UI affordance to switch from PinLock → Sign in. Either inject a 'Sign in instead' link on PinLock, or detect 'has account on this device but no token' and route to AuthScreen.",
+    "CORS: backend has explicit per-origin allow lists (per the request brief mentioning CORS_ORIGINS/CORS_ORIGIN_REGEX) but the response carries ACAO:* — strongly suggests Cloudflare or a k8s gateway is wrapping the response. Verify by hitting backend directly inside the cluster vs through the public preview URL.",
+    "AuthScreen.jsx login UX path: not exercised in this iteration because unreachable. Will need re-test in iter 10."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "CORS check + curl login OK (~90% of what was testable)",
+    "frontend": "KYC pages 100% · SPA boot 0% (cannot reach any post-login screen because of the undefined backend URL crash)"
+  },
+  "test_credentials": "test@perkorbit.app / Perk@1234 + PIN 1234 — NOT exercised (no auth screen reachable on production)",
+  "seed_data_creation": "None — could not create test data because app crashes before any voucher/membership UI is reachable.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Two HARD blockers must be fixed before any UI flow can be re-tested: (1) Vercel project envs MUST set VITE_BACKEND_URL=https://orbit-vouchers.preview.emergentagent.com (preferred — matches lib/api.js) and/or REACT_APP_BACKEND_URL — then redeploy. Verify the new bundle by curl-grepping for 'orbit-vouchers.preview.emergentagent.com' in /assets/index-*.js. (2) The edge CORS response needs to be Origin-specific, not '*', when ACAC:true. After both fixes, the suggested re-test sequence: (a) load https://perkworth.com — confirm /api/auth/me hits the real backend (Network tab); (b) confirm there is a path to AuthScreen (or PinLock shows a 'Sign in' link); (c) login with test@perkorbit.app/Perk@1234; (d) PIN 1234; (e) home loads with /api/membership/status & /api/notifications returning JSON; (f) open Add Voucher sheet, save TEST_brand_{ts}; (g) Membership page shows ₹99/quarter and Razorpay button is rendered & enabled (DO NOT click Pay Now). KYC URLs are GREEN — no need to re-test them unless content is regenerated.",
+  "rca of the issue": "Vite project (per vercel.json: framework: vite) was given a vite.config.js that uses `define: { 'process.env.REACT_APP_BACKEND_URL': JSON.stringify(env.REACT_APP_BACKEND_URL) }` with env loaded from loadEnv(mode, process.cwd(), ''). On Vercel, the build runs in a clean container where /app/frontend/.env may not be committed AND no REACT_APP_BACKEND_URL is set in Vercel project env vars. Therefore env.REACT_APP_BACKEND_URL === undefined → JSON.stringify(undefined) === 'undefined' (literal 4-letter string) → bundle inlines `const BACKEND_URL = undefined;` → fetch(`${BACKEND_URL}/api/auth/me`) → fetches `undefined/api/auth/me` relative to current origin → www.perkworth.com/undefined/api/auth/me → vercel.json rewrite '/((?!api/).*)' catches it (does not start with /api/) → returns index.html → React tries to consume JSON, calls `.map()` on HTML string → 'f.map is not a function' → unhandled error in render path → root unmounts → blank screen. Mitigation: set VITE_BACKEND_URL (preferred) AND/OR REACT_APP_BACKEND_URL in the Vercel project's Environment Variables, then redeploy. Verify in the built JS that the literal string 'undefined' is no longer concatenated before '/api/'."
+}
