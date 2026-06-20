@@ -1,9 +1,9 @@
 import React from 'react'
-import { ShieldCheck, Star, Sparkles, UserPlus, Smartphone, LifeBuoy, FileText, MessageCircle, Lock, Settings as SettingsIcon, LogOut, CreditCard } from 'lucide-react'
+import { ShieldCheck, Star, Sparkles, UserPlus, Smartphone, LifeBuoy, FileText, MessageCircle, Lock, Settings as SettingsIcon, LogOut, CreditCard, ShieldAlert } from 'lucide-react'
 import { Tag } from './ui'
 import { getProfile } from '../lib/store'
 
-export default function ProfileMenu({ open, onClose, onNavigate, memberStatus }) {
+export default function ProfileMenu({ open, onClose, onNavigate, memberStatus, isAdmin }) {
   if (!open) return null
   return (
     <div className="fixed inset-0 z-40" onClick={onClose} data-testid="profile-menu-backdrop">
@@ -44,6 +44,16 @@ export default function ProfileMenu({ open, onClose, onNavigate, memberStatus })
           </div>
           <span className="text-[10px] font-bold uppercase tracking-wider text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-2 py-0.5">Cards</span>
         </button>
+
+        {isAdmin && (
+          <button data-testid="menu-admin-registry" onClick={() => { onNavigate('admin-registry'); onClose() }} className="w-full flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-ink-50">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="w-4 h-4 text-terracotta-700" />
+              <span className="text-sm font-semibold text-ink-800">Registry Management</span>
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-terracotta-800 bg-terracotta-50 border border-terracotta-200 rounded-full px-2 py-0.5">Admin</span>
+          </button>
+        )}
         <button data-testid="menu-circle" onClick={() => { onNavigate('circle'); onClose() }} className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-ink-50">
           <UserPlus className="w-4 h-4 text-ink-700" />
           <span className="text-sm font-semibold text-ink-800">Family Circle</span>

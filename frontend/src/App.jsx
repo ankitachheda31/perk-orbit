@@ -27,6 +27,7 @@ import SupportHistoryScreen from './screens/SupportHistoryScreen'
 import PrivacyScreen from './screens/PrivacyScreen'
 import HistoryScreen from './screens/HistoryScreen'
 import CardOptimizerScreen from './screens/CardOptimizerScreen'
+import AdminRegistryScreen from './screens/AdminRegistryScreen'
 
 import AddVoucherSheet from './sheets/AddVoucherSheet'
 import HowToSheet from './sheets/HowToSheet'
@@ -213,6 +214,7 @@ export default function App() {
     if (where === 'protect') setProtectOpen(true)
     if (where === 'perk-tips') push('perk-tips')
     if (where === 'card-optimizer') push('card-optimizer')
+    if (where === 'admin-registry') push('admin-registry')
     if (where === 'faq') push('faq')
     if (where === 'privacy-control') push('privacy-control')
     if (where === 'replay-tour') { localStorage.removeItem('perk_orbit_tour_done'); setTourDone(false) }
@@ -322,6 +324,9 @@ export default function App() {
         {current.screen === 'card-optimizer' && (
           <CardOptimizerScreen onBack={pop} pin={effectivePin} toast={toast} />
         )}
+        {current.screen === 'admin-registry' && (
+          <AdminRegistryScreen onBack={pop} toast={toast} />
+        )}
         {current.screen === 'privacy' && (<PrivacyScreen onBack={pop} onOpenProtect={() => setProtectOpen(true)} />)}
         {current.screen === 'perk-tips' && (
           <PerkTipsScreen onBack={pop} pin={effectivePin} isPro={!!memberStatus?.active} onUpgrade={() => push('membership')} />
@@ -340,7 +345,7 @@ export default function App() {
       </div>
 
       <HowWeProtectYouModal open={protectOpen} onClose={() => setProtectOpen(false)} />
-      <ProfileMenu open={profileOpen} onClose={() => setProfileOpen(false)} onNavigate={handleNavigate} memberStatus={memberStatus} />
+      <ProfileMenu open={profileOpen} onClose={() => setProfileOpen(false)} onNavigate={handleNavigate} memberStatus={memberStatus} isAdmin={authUser?.role === 'admin'} />
 
       <AddVoucherSheet key={editingVoucher?.id || 'new'} open={addOpen} onClose={closeAddSheet} pin={effectivePin} onSaved={bumpRefresh} toast={toast} editing={editingVoucher} />
       <HowToSheet voucher={howToFor} open={!!howToFor} onClose={() => setHowToFor(null)} />

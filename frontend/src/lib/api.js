@@ -74,6 +74,18 @@ export const Loyalty = {
   classify: (brand) => api.get('/loyalty/classify', { params: { brand } }).then(r => r.data),
 }
 
+export const Admin = {
+  stats: () => api.get('/admin/registry/stats').then(r => r.data),
+  pending: (status = 'pending') => api.get('/admin/registry/pending', { params: { status } }).then(r => r.data),
+  changelog: () => api.get('/admin/registry/changelog').then(r => r.data),
+  runs: () => api.get('/admin/registry/runs').then(r => r.data),
+  approve: (id, note) => api.post(`/admin/registry/pending/${id}/approve`, { note }).then(r => r.data),
+  reject: (id, note) => api.post(`/admin/registry/pending/${id}/reject`, { note }).then(r => r.data),
+  bulkApprove: (ids, note) => api.post('/admin/registry/pending/bulk-approve', { ids, note }).then(r => r.data),
+  bulkReject: (ids, note) => api.post('/admin/registry/pending/bulk-reject', { ids, note }).then(r => r.data),
+  runNow: () => api.post('/admin/registry/run-now').then(r => r.data),
+}
+
 export const Circle = {
   list: (pin) => api.get('/circle/members', { params: { user_pin: pin } }).then(r => r.data),
   add: (body) => api.post('/circle/members', body).then(r => r.data),

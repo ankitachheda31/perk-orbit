@@ -71,22 +71,78 @@ def classify(brand: str) -> Optional[dict]:
     return None
 
 
-def build_loyalty_router() -> APIRouter:
+def build_loyalty_router(db=None) -> APIRouter:
+    """Loyalty registry router.
+
+    When `db` is provided, the classifier also overlays approved entries from
+    `registry_overlay` (mutated by the Admin Registry Management approvals).
+    This means approved changes go live instantly, no restart required.
+    """
     router = APIRouter(prefix="/api/loyalty", tags=["loyalty"])
+
+    async def _overlay_lookup(brand: str) -> Optional[dict]:
+        if db is None or not brand:
+            return None
+        try:
+            doc = await db.registry_overlay.find_one({"_id": brand.strip().lower()})
+            if doc and not doc.get("deprecated"):
+                return doc
+        except Exception:
+            return None
+        return None
 
     @router.get("/programs")
     async def list_programs():
         reg = _load()
+        programs = list(reg.get("programs", []))
+        overlay_count = 0
+        if db is not None:
+            try:
+                async for o in db.registry_overlay.find({"deprecated": {"$ne": True}}):
+                    # Avoid duplicates by brand (case-insensitive)
+                    if not any((p.get("brand", "").lower() == (o.get("brand") or "").lower()) for p in programs):
+                        programs.append({
+                            "brand": o.get("brand"),
+                            "program": o.get("program"),
+                            "type": o.get("type"),
+                            "kind": o.get("kind"),
+                            "aliases": o.get("aliases") or [],
+                            "id_hint": o.get("id_hint"),
+                            "_overlay": True,
+                        })
+                        overlay_count += 1
+            except Exception as e:
+                log.warning("overlay merge failed: %s", e)
         return {
             "version": reg.get("version"),
             "field_labels": reg.get("field_labels", {}),
-            "programs": reg.get("programs", []),
-            "count": len(reg.get("programs", [])),
+            "programs": programs,
+            "count": len(programs),
+            "overlay_count": overlay_count,
         }
 
     @router.get("/classify")
     async def classify_brand(brand: str = Query(..., min_length=1, max_length=80)):
         reg = _load()
+        # Overlay first — any approved registry update takes precedence over JSON.
+        overlay = await _overlay_lookup(brand)
+        if overlay:
+            program_type = overlay.get("type") or "generic"
+            field_label = reg.get("field_labels", {}).get(program_type) or reg.get("field_labels", {}).get("generic")
+            return {
+                "matched": True,
+                "brand": overlay.get("brand"),
+                "program": overlay.get("program"),
+                "type": program_type,
+                "parent_company": None,
+                "membership_kind": overlay.get("kind"),
+                "category": "memberships",
+                "id_hint": overlay.get("id_hint"),
+                "earn_burn": None,
+                "aliases": overlay.get("aliases", []),
+                "field_label": field_label,
+                "source": "overlay",
+            }
         match = classify(brand)
         if not match:
             return {

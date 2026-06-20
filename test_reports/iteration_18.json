@@ -1,0 +1,44 @@
+{
+  "summary": "Iter 18 — Registry Intelligence + Admin Management. Backend: 21/21 pytest pass at /app/backend/tests/test_iter18_admin_registry.py (admin role seed for test@perkorbit.app, 401/403 admin gate, stats shape, HI pinning in pending list, status filters approved/all, single approve→registry_overlay writethrough (verified live: GET /api/loyalty/classify?brand=TEST_HDFC_Diners_Black returns source='overlay'), 409 on re-approve, single reject→changelog action='rejected', bulk-approve/reject shape with 'not_pending_or_not_found' for missing ids, changelog DESC sort + actor==admin_email, runs list, regression on /api/loyalty/classify+programs+cards+vouchers+notifications). Cron line 'Registry Intelligence cron scheduled (Mon/Wed/Fri 04:00 IST)' present in backend logs on every startup. health_check.py 14/14 HEALTHY. FRONTEND: CRITICAL — admin menu entry 'Registry Management' (menu-admin-registry) is NEVER shown to admin user because authUser state in /app/frontend/src/App.jsx drops the `role` field at three setAuthUser call-sites (lines 131, 160, 166). The /api/auth/me response DOES contain role='admin' (verified at API), but the frontend code reads only id/email/name/phone and discards role. Then line 348 evaluates `authUser?.role === 'admin'` which is always false, so the gated <button data-testid='menu-admin-registry'> never renders. Live repro: login as test@perkorbit.app, set PIN, open profile-avatar → menu shows menu-membership / menu-perk-tips / menu-card-optimizer / menu-circle / menu-sms-scanner / menu-support / menu-privacy / menu-protect / menu-faq / menu-privacy-control / menu-settings / menu-lock but NO menu-admin-registry. Because the menu is hidden, the AdminRegistryScreen could not be reached via normal navigation. Code review of AdminRegistryScreen.jsx confirms all required testids (admin-registry-screen, stat-pending, stat-high-impact, stat-approved, stat-rejected, tab-pending, tab-changelog, tab-runs, admin-run-now, bulk-select-all, bulk-action-bar, bulk-approve, bulk-reject, pending-list, hi-rail-<id>, hi-badge-<id>, data-high-impact on rows) are correctly wired — only the entry-point is blocked.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.jsx setAuthUser", "issue": "Admin role is stripped from authUser state — admin menu 'Registry Management' never renders even for admins. /api/auth/me returns role='admin' correctly, but App.jsx setAuthUser calls (lines 131, 160, 166) only spread id/email/name/phone. ProfileMenu receives isAdmin=false unconditionally.", "selector": "[data-testid='menu-admin-registry']", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "Admin gating on AdminRegistryScreen", "issue": "Cannot be exercised via UI because the menu entry that navigates to 'admin-registry' is hidden behind the broken isAdmin flag. The screen itself (AdminRegistryScreen.jsx) has all required testids per code review.", "affected_selectors": ["[data-testid='menu-admin-registry']", "[data-testid='admin-registry-screen']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter18_admin_registry.py",
+    "/app/test_reports/pytest/iter18_admin.xml"
+  ],
+  "action_items": [
+    "FIX in /app/frontend/src/App.jsx — include `role` in every setAuthUser({...}) call so authUser.role flows from backend. Three call-sites: (a) line 131 inside the /me hydration: `setAuthUser({ id: me._id || me.id, email: me.email, name: me.name, phone: me.phone, role: me.role })`; (b) line 160 in onAuthed (signup/login flow): `setAuthUser({ id: u.id, email: u.email, name: u.name || '', phone: u.phone || '', role: u.role })`; (c) line 166 in the locked-screen onAuthed: same. After the fix, ProfileMenu's `isAdmin={authUser?.role === 'admin'}` (line 348) will resolve correctly and the menu-admin-registry button will render for admin accounts, unblocking the AdminRegistryScreen UI flow. Re-test the admin UI end-to-end after this change — backend is already verified, so only the UI mount, stats tiles, HI rail pinning, bulk-select+approve, and changelog/runs tabs need re-verification.",
+    "BACKEND TIP: Confirm that /api/auth/signup and /api/auth/login response bodies (not just /api/auth/me) include the user `role` so the frontend gets it on first auth without an extra /me round-trip. If they don't, also add role to those responses."
+  ],
+  "critical_code_review_comments": [
+    "registry_service.py + admin_routes.py split is clean — pure logic vs HTTP layer is a good pattern; ensure_admins idempotent and safe on every startup; cron registered with replace_existing=True so double-start is safe.",
+    "Overlay writethrough verified live: brand-lowercased _id ensures O(1) lookup on /api/loyalty/classify; source='overlay' return field correctly distinguishes admin-approved entries from baseline registry — UI can show 'updated by admin' badge later.",
+    "apply_approval correctly handles all 5 change_types — new/upgrade/rule/fee go to overlay with full doc; program_deprecated sets {deprecated:true} flag; rejected items create changelog WITHOUT overlay write (verified).",
+    "Bulk endpoints (200-item cap) use a single $in query then iterate — good for perf; per-id results array gives the UI granular feedback. The 'not_pending_or_not_found' error string is stable for the UI to map.",
+    "FRONTEND BUG: App.jsx authUser state intentionally narrows the user object to {id, email, name, phone} which silently drops `role`. The admin UI was wired correctly downstream but is dead code in practice. Suggest a) including role in the narrowed object, or b) just storing the full user object from /me to future-proof against similar field drops."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter18_admin_registry.py (new — 20 tests, 18 pass + 2 conditional skips that pass once seed exists)"
+  ],
+  "success_rate": {
+    "backend": "100% (21/21 after seeding TEST_ pending docs for the approve/reject paths)",
+    "frontend": "BLOCKED — admin menu entry never renders due to role being stripped in App.jsx setAuthUser. Code review of AdminRegistryScreen confirms all data-testid hooks are in place; live UI mount could not be exercised."
+  },
+  "test_credentials": "Admin: test@perkorbit.app / Perk@1234 (PIN 1234). Non-admin: any fresh TEST_<uuid>@example.com signup.",
+  "seed_data_creation": "Inserted 5 TEST_* pending registry items directly into MongoDB (registry_pending collection): TEST_HDFC_Diners_Black (HI), TEST_LowImpactBrand, TEST_RejectMe, TEST_AmexPlatinum_UI (HI), TEST_LowItem_UI. The first three were consumed by approve/reject pytest. Two remain pending for the main agent to verify the UI after fixing the role-strip bug. Approved item is now live in registry_overlay (source='overlay' for that brand).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend is solid — 21/21 pass; cron registered; overlay live; changelog audited; admin role seed on every startup verified. The only blocker is a 1-line frontend bug: App.jsx setAuthUser drops `role` — fix the 3 call-sites at lines 131/160/166 to include `role: <source>.role`. After the fix, log in as test@perkorbit.app, set PIN 1234, open profile-avatar — menu-admin-registry should appear (red 'Admin' badge), click it, verify stat tiles render, click bulk-select-all → bulk-action-bar appears, click bulk-approve → toast shows approved count, items leave pending list, changelog tab shows entries with actor=test@perkorbit.app. Two TEST_* HI pending items remain in DB for this UI verification.",
+  "rca of the issue": "FRONTEND BUG · Admin menu hidden for admin users. RCA: /api/auth/me returns role='admin' correctly (backend pytest confirms). But /app/frontend/src/App.jsx setAuthUser calls at lines 131, 160, and 166 each construct a narrow object {id,email,name,phone} that drops the role field. Then at line 348 ProfileMenu is rendered with isAdmin={authUser?.role === 'admin'} — which is always false because authUser.role is undefined. So the gated <button data-testid='menu-admin-registry'> at ProfileMenu.jsx:49 never renders. Reproduction: log in as test@perkorbit.app, set PIN, open profile menu — observe absence of 'Registry Management' entry; observe DOM has no [data-testid='menu-admin-registry'] node. Fix: add `role: <src>.role` to all three setAuthUser({...}) spreads. No backend change needed."
+}

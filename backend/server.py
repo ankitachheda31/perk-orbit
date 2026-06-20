@@ -1311,6 +1311,8 @@ from webhook_export import build_webhook_router
 from cards import build_cards_router
 from spend_intel import build_spend_router
 from loyalty_registry import build_loyalty_router
+from registry_service import start_registry_intel_cron, ensure_admins
+from admin_routes import build_admin_router
 
 app.include_router(build_auth_router(db))
 app.include_router(build_intelligence_router(db, EMERGENT_LLM_KEY))
@@ -1318,7 +1320,8 @@ app.include_router(build_optimizer_router(db, EMERGENT_LLM_KEY))
 app.include_router(build_webhook_router(db, make_get_current_user(db)))
 app.include_router(build_cards_router(db))
 app.include_router(build_spend_router(db, EMERGENT_LLM_KEY))
-app.include_router(build_loyalty_router())
+app.include_router(build_loyalty_router(db))
+app.include_router(build_admin_router(db, EMERGENT_LLM_KEY, make_get_current_user(db)))
 
 
 @app.on_event("startup")
@@ -1334,8 +1337,20 @@ async def _on_startup():
         log.warning("Index init: %s", e)
     # Seed program registry
     await seed_programs(db)
+    # Promote configured owner emails to role=admin
+    await ensure_admins(db)
     # Schedule daily cron
     start_intelligence_cron(db, EMERGENT_LLM_KEY)
+    # Schedule the Registry Intelligence cron (Mon/Wed/Fri 04:00 IST)
+    start_registry_intel_cron(db, EMERGENT_LLM_KEY)
+    # Indexes for the new collections
+    try:
+        await db.registry_pending.create_index([("status", 1), ("high_impact", -1), ("detected_at", -1)])
+        await db.registry_pending.create_index("source_url")
+        await db.registry_overlay.create_index("brand")
+        await db.registry_changelog.create_index([("at", -1)])
+    except Exception as e:
+        log.warning("Registry index init: %s", e)
 
 
 @app.get("/")
