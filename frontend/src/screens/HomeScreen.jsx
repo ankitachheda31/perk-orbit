@@ -16,7 +16,14 @@ export default function HomeScreen({ pin, onProfileClick, memberStatus, onOpenAd
 
   const load = async () => {
     setLoading(true)
-    try { setEnding(await Vouchers.endingSoon(pin, 7)) } finally { setLoading(false) }
+    try {
+      const data = await Vouchers.endingSoon(pin, 7)
+      setEnding(Array.isArray(data) ? data : [])
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[HomeScreen] failed to load ending-soon vouchers', e)
+      setEnding([])
+    } finally { setLoading(false) }
   }
   useEffect(() => { load() /* eslint-disable-next-line */ }, [pin, refreshKey])
 

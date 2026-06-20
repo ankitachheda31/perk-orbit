@@ -18,10 +18,17 @@ export default function MyCouponsScreen({ pin, onProfileClick, onOpenAdd, toast,
     setLoading(true)
     try {
       const list = await Vouchers.list(pin, tab === 'all' ? undefined : tab)
-      setItems(list)
+      setItems(Array.isArray(list) ? list : [])
       if (tab === 'memberships' || tab === 'all') {
-        try { setRoi(await Memberships.roi(pin)) } catch { /* ignore */ }
+        try {
+          const r = await Memberships.roi(pin)
+          setRoi(Array.isArray(r) ? r : [])
+        } catch { /* ignore */ }
       }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[MyCoupons] failed to load list', e)
+      setItems([])
     } finally { setLoading(false) }
   }
   useEffect(() => { load() /* eslint-disable-next-line */ }, [pin, tab, refreshKey])

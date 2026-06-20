@@ -12,7 +12,19 @@ export default function MyPointsScreen({ pin, onProfileClick, refreshKey, openHo
   const [loading, setLoading] = useState(true)
   const load = async () => {
     setLoading(true)
-    try { setData(await Points.summary(pin)) } finally { setLoading(false) }
+    try {
+      const d = await Points.summary(pin)
+      // Defensive: ensure shape so .map on `breakdown` never crashes
+      setData({
+        total_points: (d && typeof d.total_points === 'number') ? d.total_points : 0,
+        approx_value_inr: (d && typeof d.approx_value_inr === 'number') ? d.approx_value_inr : 0,
+        breakdown: (d && Array.isArray(d.breakdown)) ? d.breakdown : [],
+      })
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[MyPoints] failed to load', e)
+      setData({ total_points: 0, approx_value_inr: 0, breakdown: [] })
+    } finally { setLoading(false) }
   }
   useEffect(() => { load() /* eslint-disable-next-line */ }, [pin, refreshKey])
 

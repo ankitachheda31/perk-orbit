@@ -1,0 +1,39 @@
+{
+  "summary": "Verified BOTH fixes from iteration 9 end-to-end on Emergent preview URL. (1) The 'f.map is not a function' crash on Add Voucher save is FIXED — saving a voucher no longer crashes the app; HomeScreen/MyCouponsScreen re-render correctly. (2) The new Owner/Relation tag feature is fully working: OwnerPicker renders all 15 chips inside the Add Voucher sheet, Self is the default, the picked relation is saved with the voucher, and the VoucherCard renders an emerald '👤 <Owner>' tag on MyCoupons screen.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/test_reports/iteration_10.json"],
+  "tests_executed": [
+    "Backend POST /api/vouchers with owner='Father-in-law' → 200, response echoes owner='Father-in-law', parent_company auto-tagged='Tata Group' ✓",
+    "Backend GET /api/vouchers returns owner field correctly ✓",
+    "Login with test@perkorbit.app / Perk@1234 → success, lands on PIN screen ✓",
+    "PIN setup: 1234 entered twice via [data-testid=key-N] keypad → home loaded ✓",
+    "Home shows [data-testid=add-from-home] button + existing voucher cards with owner-tag-<id> already in place ✓",
+    "Add Voucher sheet opens; [data-testid=owner-picker-group] present with all 15 chips (self,spouse,husband,wife,father,mother,brother,sister,brother-in-law,sister-in-law,son,daughter,father-in-law,mother-in-law,other) — Missing chips: [] ✓",
+    "Default 'Self' chip highlighted (emerald) ✓",
+    "Filled Croma / Test Rs 100 off / TEST100 / 100 / 2026-12-31, clicked owner-chip-brother, clicked save-voucher → toast 'Saved to your wallet', sheet closed, App did NOT crash (body contained no 'Something went wrong' / no '.map is not a function') ✓",
+    "Navigated to MyCoupons tab → new Croma voucher card renders with [data-testid=owner-tag-<id>] showing '👤 Brother' ✓",
+    "Pre-existing demo voucher still renders correctly with '👤 Self' ✓",
+    "No ErrorBoundary triggered, no blank screen, no console errors related to .map or undefined backend URL ✓"
+  ],
+  "verified_data_testids": [
+    "owner-picker-group", "owner-chip-self", "owner-chip-spouse", "owner-chip-husband", "owner-chip-wife", "owner-chip-father", "owner-chip-mother", "owner-chip-brother", "owner-chip-sister", "owner-chip-brother-in-law", "owner-chip-sister-in-law", "owner-chip-son", "owner-chip-daughter", "owner-chip-father-in-law", "owner-chip-mother-in-law", "owner-chip-other", "save-voucher", "owner-tag-<voucherid>"
+  ],
+  "not_tested_due_to_budget": [
+    "Full Membership add flow (Amazon Prime Yearly / Husband) — the membership card 'Owned by Husband' tag rendering on MembershipCard. Note: code review of /app/frontend/src/components/Cards.jsx line 109-111 confirms data-testid=owner-tag-<id> with text 'Owned by {m.owner || Self}' is implemented identically to VoucherCard, and backend Pydantic accepts owner for memberships too (Voucher model line 112). Main agent can self-verify in a single click."
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AddVoucherSheet.jsx line 41/203/325: REACT_APP_BACKEND_URL fallback uses `typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL` — works but slightly verbose; the new vite.config.js define() should make import.meta.env.VITE_BACKEND_URL always defined now. Low priority.",
+    "Voucher backend model (server.py L112): owner is Optional[str] without enum/whitelist validation — any string accepted (intentional to allow 'Other' free-text). Acceptable for now.",
+    "OwnerPicker testid for 'Brother-in-law'/'Sister-in-law'/'Father-in-law'/'Mother-in-law' uses lowercase hyphenated form (owner-chip-brother-in-law) — confirmed working."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "test@perkorbit.app / Perk@1234 / PIN 1234 — all valid on Emergent preview",
+  "seed_data_creation": "Created TEST_owner_1234 user via backend POST with owner='Father-in-law'; also created 1 live voucher (Croma, owner=Brother) for the M user during UI test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both blocker bugs from iteration 9 are FIXED on the Emergent preview URL. Voucher save no longer crashes and owner picker + owner tag work end-to-end. Production perkworth.com still needs a Vercel rebuild (per user note). Membership flow with owner was not exercised in UI but: (a) backend accepts owner field for membership category, (b) MembershipCard.jsx renders owner-tag with 'Owned by {owner}' which is structurally identical to VoucherCard. Safe to release.",
+  "rca_of_the_issue": "Iteration 9 RCAs were: (1) VITE_BACKEND_URL undefined in Vercel prod build → resolved via vite.config.js hardcoded DEFAULT_BACKEND_URL + double-define of VITE_BACKEND_URL & REACT_APP_BACKEND_URL. Verified by absence of 'undefined/api' fetch errors in console. (2) HomeScreen/MyCouponsScreen calling .map on non-array after save → resolved via Array.isArray guards + global ErrorBoundary. Verified by saving a fresh voucher and observing the app stays mounted with full card render."
+}

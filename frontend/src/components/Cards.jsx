@@ -32,6 +32,7 @@ export function VoucherCard({ v, onCopy, onHowTo, onDelete, onShare, onUnshare, 
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="font-display font-bold text-ink-900 text-base truncate">{v.brand}</span>
             {v.parent_company && v.parent_company !== v.brand ? <Tag tone="neutral">{v.parent_company}</Tag> : null}
+            <Tag tone="emerald" data-testid={`owner-tag-${v.id}`}>👤 {v.owner || 'Self'}</Tag>
           </div>
           <p className="text-sm text-ink-700 leading-snug">{v.title}</p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -105,6 +106,9 @@ export function MembershipCard({ m, onUpdateSavings }) {
           {m.parent_company && m.parent_company !== m.brand ? (
             <p className="text-[11px] text-white/60 mt-0.5">By {m.parent_company}</p>
           ) : null}
+          <p data-testid={`owner-tag-${m.id}`} className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold uppercase tracking-wider bg-white/15 text-white px-2 py-0.5 rounded-full border border-white/20">
+            <span>👤</span> Owned by {m.owner || 'Self'}
+          </p>
         </div>
         <Tag tone={expired ? 'red' : expiringSoon ? 'gold' : (isAsset ? 'gold' : 'neutral')}>
           {expired ? 'Expired' : expiringSoon ? `${daysRemaining}d left` : (isAsset ? 'ROI' : 'Renews')}

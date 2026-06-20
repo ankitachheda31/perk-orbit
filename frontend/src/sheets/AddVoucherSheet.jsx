@@ -38,7 +38,7 @@ function BrandAutocomplete({ value, onChange, placeholder, onSelectSuggestion })
     if (!value || value.length < 2) { setSuggestions([]); setOpen(false); return }
     setLoading(true)
     const t = setTimeout(() => {
-      const base = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL) || ''
+      const base = (import.meta.env.VITE_BACKEND_URL) || (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL) || ''
       fetch(`${base}/api/brands/lookup?q=${encodeURIComponent(value)}`)
         .then(r => r.ok ? r.json() : null)
         .then(d => {
@@ -124,10 +124,72 @@ function BrandAutocomplete({ value, onChange, placeholder, onSelectSuggestion })
   )
 }
 
+// Predefined owner/relation options for the household ownership tag.
+// "Self" is the default. The list focuses on Indian family relations.
+export const OWNER_OPTIONS = [
+  'Self', 'Spouse', 'Husband', 'Wife',
+  'Father', 'Mother', 'Brother', 'Sister',
+  'Brother-in-law', 'Sister-in-law',
+  'Son', 'Daughter',
+  'Father-in-law', 'Mother-in-law',
+  'Other',
+]
+
+function OwnerPicker({ value, onChange }) {
+  const safeValue = OWNER_OPTIONS.includes(value) ? value : 'Self'
+  const [showOther, setShowOther] = React.useState(safeValue === 'Other' || (value && !OWNER_OPTIONS.includes(value)))
+  const [otherText, setOtherText] = React.useState(OWNER_OPTIONS.includes(value) ? '' : (value || ''))
+
+  return (
+    <div data-testid="owner-picker-group">
+      <label className="text-[11px] font-bold text-ink-500 uppercase tracking-wider">Owned by</label>
+      <p className="text-[11px] text-ink-500 mt-1 leading-relaxed">Whose voucher / membership is this? Useful in the Family Circle view.</p>
+      <div className="mt-2 flex flex-wrap gap-1.5" data-testid="owner-chip-row">
+        {OWNER_OPTIONS.map((opt) => {
+          const active = safeValue === opt
+          return (
+            <button
+              key={opt}
+              type="button"
+              data-testid={`owner-chip-${opt.toLowerCase().replace(/\s+/g, '-').replace(/-+/g, '-')}`}
+              onClick={() => {
+                if (opt === 'Other') {
+                  setShowOther(true); onChange('Other')
+                } else {
+                  setShowOther(false); setOtherText(''); onChange(opt)
+                }
+              }}
+              className={`text-[11px] font-semibold px-3 py-1.5 rounded-full border transition active:scale-95 ${
+                active
+                  ? 'bg-emerald-800 text-white border-emerald-800 shadow-sm'
+                  : 'bg-ink-50 text-ink-700 border-ink-200 hover:border-emerald-700'
+              }`}
+            >
+              {opt}
+            </button>
+          )
+        })}
+      </div>
+      {showOther ? (
+        <input
+          data-testid="owner-other-input"
+          type="text"
+          value={otherText}
+          onChange={(e) => { setOtherText(e.target.value); onChange(e.target.value || 'Other') }}
+          placeholder="e.g. Cousin, Roommate, Uncle…"
+          className="mt-2 w-full bg-ink-50 border border-ink-200 rounded-2xl px-3 py-2.5 text-sm placeholder:text-ink-400"
+        />
+      ) : null}
+    </div>
+  )
+}
+
+
+
 export default function AddVoucherSheet({ open, onClose, pin, onSaved, toast }) {
   const [mode, setMode] = useState('manual')
   const [busy, setBusy] = useState(false)
-  const [form, setForm] = useState({ brand: '', title: '', code: '', value: '', expiry: '', start_date: '', category: 'vouchers', membership_kind: '', fee_paid: '', benefit_rate: '', how_to_redeem: '', notes: '' })
+  const [form, setForm] = useState({ brand: '', title: '', code: '', value: '', expiry: '', start_date: '', category: 'vouchers', membership_kind: '', fee_paid: '', benefit_rate: '', how_to_redeem: '', notes: '', owner: 'Self' })
   const [smsText, setSmsText] = useState('')
   const [imagePreview, setImagePreview] = useState(null)
   const [parentBrand, setParentBrand] = useState(null)
@@ -138,7 +200,7 @@ export default function AddVoucherSheet({ open, onClose, pin, onSaved, toast }) 
   useEffect(() => {
     if (!form.brand || form.brand.length < 2) { setParentBrand(null); return }
     const id = setTimeout(() => {
-      const base = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL) || ''
+      const base = (import.meta.env.VITE_BACKEND_URL) || (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL) || ''
       fetch(`${base}/api/brands/lookup?q=${encodeURIComponent(form.brand)}`)
         .then(r => r.ok ? r.json() : null)
         .then(d => {
@@ -164,7 +226,7 @@ export default function AddVoucherSheet({ open, onClose, pin, onSaved, toast }) 
   }, [form.start_date, form.expiry, form.category])
 
   const reset = () => {
-    setForm({ brand: '', title: '', code: '', value: '', expiry: '', start_date: '', category: 'vouchers', membership_kind: '', fee_paid: '', benefit_rate: '', how_to_redeem: '', notes: '' })
+    setForm({ brand: '', title: '', code: '', value: '', expiry: '', start_date: '', category: 'vouchers', membership_kind: '', fee_paid: '', benefit_rate: '', how_to_redeem: '', notes: '', owner: 'Self' })
     setSmsText(''); setImagePreview(null); setMode('manual'); setParentBrand(null); setDateError('')
   }
 
@@ -191,6 +253,7 @@ export default function AddVoucherSheet({ open, onClose, pin, onSaved, toast }) 
         benefit_rate: (form.category === 'memberships' && form.benefit_rate) ? (Number(form.benefit_rate) / 100) : null,
         how_to_redeem: form.how_to_redeem || null,
         notes: form.notes || null,
+        owner: form.owner || 'Self',
       })
       toast(form.category === 'memberships' ? 'Membership saved' : 'Saved to your wallet')
       reset(); onClose(); onSaved?.()
@@ -259,7 +322,7 @@ export default function AddVoucherSheet({ open, onClose, pin, onSaved, toast }) 
       const fd = new FormData()
       const ext = (blob.type.includes('mp4') ? 'm4a' : blob.type.includes('wav') ? 'wav' : 'webm')
       fd.append('file', blob, `voice.${ext}`)
-      const base = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL) || ''
+      const base = (import.meta.env.VITE_BACKEND_URL) || (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL) || ''
       const resp = await fetch(`${base}/api/extract/voice`, { method: 'POST', body: fd })
       if (!resp.ok) {
         const t = await resp.text().catch(() => '')
@@ -527,6 +590,9 @@ export default function AddVoucherSheet({ open, onClose, pin, onSaved, toast }) 
             onChange={(v) => setForm({ ...form, title: v })}
             placeholder={form.category === 'memberships' ? 'Amazon Prime Yearly' : '₹100 off on order above ₹399'}
           />
+
+          {/* OWNER PICKER — who does this voucher/membership belong to? */}
+          <OwnerPicker value={form.owner || 'Self'} onChange={(v) => setForm({ ...form, owner: v })} />
 
           {/* VOUCHER-ONLY FIELDS */}
           {form.category === 'vouchers' ? (

@@ -109,6 +109,7 @@ class Voucher(BaseDocument):
     savings_realized: Optional[float] = 0.0
     how_to_redeem: Optional[str] = None
     notes: Optional[str] = None
+    owner: Optional[str] = "Self"  # Self | Spouse | Husband | Wife | Father | Mother | Brother | Sister | Sister-in-law | Brother-in-law | Son | Daughter | Other
     shared_with: List[str] = Field(default_factory=list)
     is_sharing: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -133,6 +134,7 @@ class VoucherCreate(BaseModel):
     savings_realized: Optional[float] = 0.0
     how_to_redeem: Optional[str] = None
     notes: Optional[str] = None
+    owner: Optional[str] = "Self"
 
 
 class VoucherUpdate(BaseModel):
@@ -152,6 +154,7 @@ class VoucherUpdate(BaseModel):
     savings_realized: Optional[float] = None
     how_to_redeem: Optional[str] = None
     notes: Optional[str] = None
+    owner: Optional[str] = None
     is_sharing: Optional[bool] = None
     shared_with: Optional[List[str]] = None
 

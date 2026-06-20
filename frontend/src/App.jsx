@@ -121,7 +121,13 @@ export default function App() {
     ;(async () => {
       try {
         const me = await Auth.me()
-        if (alive && me) setAuthUser({ id: me._id || me.id, email: me.email, name: me.name, phone: me.phone })
+        // Defensive: backend must return an object with an email; otherwise treat as unauth.
+        // (Guards against rewrites returning HTML as 200 if backend URL ever misconfigured.)
+        if (alive && me && typeof me === 'object' && me.email) {
+          setAuthUser({ id: me._id || me.id, email: me.email, name: me.name, phone: me.phone })
+        } else if (alive) {
+          setAuthUser(null); localStorage.removeItem('perk_orbit_token')
+        }
       } catch {
         if (alive) { setAuthUser(null); localStorage.removeItem('perk_orbit_token') }
       } finally {
