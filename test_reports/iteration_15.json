@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 15 — User-First (Trust + Revenue) verification PASS. 26/26 backend pytest pass (12 new + 14 regression). Health check 14/14 HEALTHY. Frontend end-to-end: login → PIN → home → profile menu shows 'Savings Assistant' label, Settings shows new 'Expiry alerts' card with notif-toggle, Savings Assistant screen verified for already-optimal (BPCL+fuel), recommendations + delta pills (Amazon Pay ICICI → BPCL with delta ₹6001/yr), transparency modal with vs-current-block + 'NOT counted' section, and affiliate POST /api/cards/click captures source=best, current_card_id, category, delta_inr=6001, monthly_spend_inr=10000.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter15_userfirst.py",
+    "/app/backend/tests/test_cards.py",
+    "/app/test_reports/pytest/iter15.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "cards.py /api/cards/best: filter is correct — recommendations exclude current_card_id AND require net_value > current_net. you_are_already_optimal flag is computed AFTER filtering (clean).",
+    "server.py _generate_dynamic_notifications: triggers only at days_left==3 OR 0<=days_left<=1 (skips redeemed). Upsert uses (user_pin, kind, ref_voucher_id) — idempotent confirmed. Stale notifications are also deleted via $nin keep_voucher_ids, which is a nice self-healing detail.",
+    "cards.py CardClickBody: all new affiliate fields (current_card_id, monthly_spend_inr, delta_inr) are Optional — graceful if frontend omits them.",
+    "Settings page: settings-pin-card and settings-biometric-card data-testids could not be found by selector (only settings-notifications-card). Biometric card is expected to be hidden in headless; the PIN card visibly renders as 'App PIN' but its data-testid (if any) doesn't match the expected token. Minor consistency note — not blocking.",
+    "Modal 'NOT counted' collapsible section confirmed present. The 'vs your current card' block (data-testid='vs-current-block') correctly appears only when a current card is set.",
+    "Affiliate POST /api/cards/click payload includes source='best', current_card_id='amazon-pay-icici', delta_inr=6001, monthly_spend_inr=10000, category='fuel' — full attribution chain working."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter15_userfirst.py (new)"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "test@perkorbit.app / Perk@1234 · PIN 1234. Verified working.",
+  "seed_data_creation": "Test created 6 vouchers (TESTBRAND_DAYS3, DAYS1, DAYS0, DAYS2, DAYS5, REDEEMED) for unique user_pin '99XX' (timestamp-based) plus 1 card_click doc with full affiliate fields. Vouchers persist; safe to garbage-collect after expiry.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 11 edit-voucher PATCH-not-POST regression was not re-exercised via UI in this run (test_iter15 focused on the new Trust + User-First feature surface; iteration 13/14 covered the edit-voucher path). Backend correctness for current_card filtering and notification triggers (3 days / 0-1 days, idempotent, skips redeemed) verified by direct API tests with manufactured expiry dates. Biometric WebAuthn still cannot be exercised in headless Playwright — settings-biometric-card hidden as expected.",
+  "validations_performed": {
+    "GET /api/notifications expiry triggers": "days_left=3 → ending_soon; days_left∈{0,1} → urgent_expiry; days_left∈{2,5} → no notif; redeemed → no notif. PASS.",
+    "Notifications idempotency (2 consecutive GETs)": "Same (kind, ref_voucher_id) tuples; no duplicates. PASS.",
+    "GET /api/cards/best fuel + current_card_id=icici-coral-fuel": "you_are_already_optimal=true, results=[], current_card_net_value_inr populated. PASS.",
+    "GET /api/cards/best fuel + current_card_id=amazon-pay-icici": "you_are_already_optimal=false, BPCL in results, delta_inr>0, current card excluded. PASS.",
+    "GET /api/cards/best without current_card_id": "All results have delta_inr=null. PASS.",
+    "POST /api/cards/click persists current_card_id/monthly_spend_inr/delta_inr": "Verified via direct MongoDB query. PASS.",
+    "GET /api/membership/status referral_code regression": "Present. PASS.",
+    "health_check.py": "14/14 HEALTHY.",
+    "Frontend login + PIN setup + skip tour": "Works.",
+    "Profile menu label 'Savings Assistant'": "PASS (testid menu-card-optimizer text='Savings AssistantCards').",
+    "Settings new 'Expiry alerts' card with notif-toggle": "PASS (label 'Turn off alerts' shown when enabled).",
+    "Savings Assistant title + subtitle 'Honest card picks · we only suggest if you save more'": "PASS.",
+    "current-card-select dropdown options (9 total: no-card + 7 cards + other)": "PASS.",
+    "already-optimal celebration card (BPCL+fuel)": "PASS.",
+    "current-card-baseline + delta pills (AmazonPay+fuel → BPCL with 'You save')": "PASS.",
+    "Explain modal + vs-current-block + 'NOT counted' details": "PASS.",
+    "Apply on best recommendation POSTs /api/cards/click with full payload + opens issuer URL in new tab": "PASS (sbicard.com popup; delta_inr=6001, monthly_spend_inr=10000, source=best, current_card_id=amazon-pay-icici, category=fuel)."
+  }
+}

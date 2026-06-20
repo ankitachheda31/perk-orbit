@@ -109,8 +109,10 @@ export const Optimizer = {
 
 export const Cards = {
   list: () => api.get('/cards').then(r => r.data),
-  best: (category, monthly_spend_inr = 10000, limit = 3) =>
-    api.get('/cards/best', { params: { category, monthly_spend_inr, limit } }).then(r => r.data),
+  best: (category, monthly_spend_inr = 10000, limit = 3, current_card_id = null) =>
+    api.get('/cards/best', {
+      params: { category, monthly_spend_inr, limit, current_card_id: current_card_id || undefined },
+    }).then(r => r.data),
   logClick: (body) => api.post('/cards/click', body).then(r => r.data).catch(() => null),
 }
 

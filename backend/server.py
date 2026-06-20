@@ -566,12 +566,6 @@ async def memberships_roi(user_pin: str = Query(...)):
     return items
 
 
-class LogSpendBody(BaseModel):
-    user_pin: str
-    amount: float = Field(..., gt=0)  # ₹ spent on this purchase
-    note: Optional[str] = None
-
-
 @api.post("/memberships/{membership_id}/log-spend")
 async def log_membership_spend(membership_id: str, payload: LogSpendBody):
     """Log a purchase made under this membership. Increments `total_spend`
@@ -950,20 +944,6 @@ async def activate_membership(user_pin: str = Query(...)):
 
 
 # -------- Razorpay Payments (LIVE — test mode) --------
-class RzpOrderRequest(BaseModel):
-    user_pin: str
-    amount_inr: int = 99  # rupees; converted to paise
-    referral_code: Optional[str] = None  # apply a friend's code for bonus
-
-
-class RzpVerifyRequest(BaseModel):
-    user_pin: str
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
-    referral_code: Optional[str] = None
-
-
 REFERRAL_BONUS_DAYS = 90  # 3 months free for both referrer & referee
 PLAN_BASE_DAYS = 92  # 3-month quarterly plan
 PLAN_LABEL = "PerkWorth Pro ₹99 / 3 months"
@@ -1144,17 +1124,23 @@ async def verify_payment(payload: RzpVerifyRequest):
 
 
 # -------- Notifications --------
+# User-first expiry policy: notify ONLY at exactly 3 days and 1 day before expiry.
+# Idempotent (upsert keyed by user_pin + kind + ref_voucher_id) so each voucher
+# fires at most ONE "ending_soon" and ONE "urgent_expiry" — never spammy.
+EXPIRY_HEADS_UP_DAYS = 3   # "Ending Soon" notification trigger
+EXPIRY_URGENT_DAYS = 1     # "Urgent Expiry" notification trigger
+
+
 async def _generate_dynamic_notifications(user_pin: str) -> list[dict]:
     """Compute ending-soon + ROI break-even alerts from current voucher data
     and upsert them into the notifications collection so the bell is in sync
     with reality on every fetch."""
     today = datetime.now(timezone.utc).date()
-    cutoff = today + timedelta(days=7)
     items: list[dict] = []
 
-    # Ending-soon vouchers (≤7 days) — with urgent_expiry escalation for <24h
+    # Expiry alerts — fire at exactly 3 days and 1 day before expiry (helpful, not spammy)
     async for v in db.vouchers.find(
-        {"user_pin": user_pin, "category": "vouchers"}
+        {"user_pin": user_pin, "category": "vouchers", "status": {"$ne": "redeemed"}}
     ):
         exp = v.get("expiry")
         if not exp:
@@ -1163,24 +1149,31 @@ async def _generate_dynamic_notifications(user_pin: str) -> list[dict]:
             exp_date = datetime.strptime(exp, "%Y-%m-%d").date()
         except Exception:
             continue
-        if today <= exp_date <= cutoff:
-            days_left = (exp_date - today).days
-            kind = "urgent_expiry" if days_left <= 1 else "ending_soon"
-            items.append(
-                {
-                    "user_pin": user_pin,
-                    "kind": kind,
-                    "ref_voucher_id": str(v["_id"]),
-                    "ref_screen": "coupons",
-                    "title": (
-                        f"⚠️ {v.get('brand', 'Voucher')} expires {'today' if days_left == 0 else 'tomorrow'}"
-                        if kind == "urgent_expiry"
-                        else f"{v.get('brand', 'Voucher')} expires in {days_left} day{'s' if days_left != 1 else ''}"
-                    ),
-                    "body": v.get("title") or v.get("code") or "Tap to view",
-                    "priority": 0 if kind == "urgent_expiry" else (1 if days_left <= 2 else 2),
-                }
-            )
+        days_left = (exp_date - today).days
+        # Two well-spaced triggers: 3 days out (heads up) + 1 day / today (urgent)
+        if days_left == EXPIRY_HEADS_UP_DAYS:
+            kind = "ending_soon"
+        elif 0 <= days_left <= EXPIRY_URGENT_DAYS:
+            kind = "urgent_expiry"
+        else:
+            continue
+        brand = v.get("brand", "Voucher")
+        if kind == "urgent_expiry":
+            when = "today" if days_left == 0 else "tomorrow"
+            title = f"⚠️ {brand} expires {when}"
+        else:
+            title = f"{brand} expires in {days_left} days"
+        items.append(
+            {
+                "user_pin": user_pin,
+                "kind": kind,
+                "ref_voucher_id": str(v["_id"]),
+                "ref_screen": "coupons",
+                "title": title,
+                "body": v.get("title") or v.get("code") or "Tap to view",
+                "priority": 0 if kind == "urgent_expiry" else 1,
+            }
+        )
 
     # Asset memberships nearing break-even
     async for m in db.vouchers.find(
@@ -1240,16 +1233,6 @@ async def list_notifications(user_pin: str = Query(...)):
 
 
 # -------- Support / WhatsApp History --------
-class SupportLog(BaseModel):
-    user_pin: str
-    voucher_id: Optional[str] = None
-    brand: Optional[str] = None
-    title: Optional[str] = None
-    code: Optional[str] = None
-    issue: str = "code-not-working"
-    channel: str = "whatsapp"
-
-
 @api.post("/support/log")
 async def log_support(payload: SupportLog):
     doc = payload.model_dump()

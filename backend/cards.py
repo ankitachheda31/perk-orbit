@@ -223,6 +223,9 @@ class CardClickBody(BaseModel):
     user_pin: Optional[str] = None
     category: Optional[str] = None
     source: Optional[str] = None  # 'best', 'list', 'voucher_widget'
+    current_card_id: Optional[str] = None  # what they were using before — for affiliate analytics
+    monthly_spend_inr: Optional[int] = None
+    delta_inr: Optional[int] = None  # projected extra annual savings vs their current card
 
 
 def build_cards_router(db) -> APIRouter:
@@ -240,12 +243,43 @@ def build_cards_router(db) -> APIRouter:
         category: str = Query(..., description="Spend category id (see /api/cards categories)"),
         monthly_spend_inr: int = Query(10000, ge=0, le=10000000),
         limit: int = Query(3, ge=1, le=7),
+        current_card_id: Optional[str] = Query(
+            None,
+            description=(
+                "Card id the user currently uses (or 'none' / null if no card). "
+                "When provided, only recommendations with HIGHER net annual value "
+                "than the current card are returned, with a delta_inr field showing "
+                "the extra savings vs the current card."
+            ),
+        ),
     ):
         scored = [_score_card(c, category, monthly_spend_inr) for c in CARDS]
         scored.sort(key=lambda c: (c["net_annual_value_inr"], c["category_rate_pct"]), reverse=True)
+
+        current_card_obj = None
+        current_net = None
+        if current_card_id and current_card_id != "none":
+            current = next((c for c in CARDS if c["id"] == current_card_id), None)
+            if current:
+                current_card_obj = _score_card(current, category, monthly_spend_inr)
+                current_net = current_card_obj["net_annual_value_inr"]
+
+        # Filter to "user benefits" only — be a Savings Assistant, not a sales channel.
+        if current_net is not None:
+            scored = [
+                {**c, "delta_inr": c["net_annual_value_inr"] - current_net}
+                for c in scored
+                if c["id"] != current_card_id and c["net_annual_value_inr"] > current_net
+            ]
+        else:
+            scored = [{**c, "delta_inr": None} for c in scored]
+
         return {
             "category": category,
             "monthly_spend_inr": monthly_spend_inr,
+            "current_card": current_card_obj,
+            "current_card_net_value_inr": current_net,
+            "you_are_already_optimal": current_net is not None and len(scored) == 0,
             "results": scored[:limit],
         }
 
@@ -259,6 +293,9 @@ def build_cards_router(db) -> APIRouter:
                 "user_pin": body.user_pin,
                 "category": body.category,
                 "source": body.source,
+                "current_card_id": body.current_card_id,
+                "monthly_spend_inr": body.monthly_spend_inr,
+                "delta_inr": body.delta_inr,
                 "at": datetime.now(timezone.utc).isoformat(),
             })
         except Exception as e:

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { ShieldCheck, KeyRound, ChevronRight, FileText, MessageCircle, Lock, Sparkles, LogOut, Trash2, AlertTriangle, Fingerprint } from 'lucide-react'
+import { ShieldCheck, KeyRound, ChevronRight, FileText, MessageCircle, Lock, Sparkles, LogOut, Trash2, AlertTriangle, Fingerprint, Bell } from 'lucide-react'
 import { Card, GhostButton, TopBar } from '../components/ui'
 import { Auth } from '../lib/api'
 import { setStoredPin, setProfile } from '../lib/store'
 import { isBiometricAvailable, isBiometricEnrolled, enrollBiometric, disableBiometric } from '../lib/biometric'
+import { isNotifOptedIn, setNotifOptIn, requestNotificationPermission } from '../lib/push'
 
 export default function SettingsPage({ onBack, onResetPin, onOpenProtect, onOpenPrivacy, onOpenFAQ, onOpenPrivacyControl, onOpenPerkTips, onReplayTour, onWipe, onLogout, toast }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -12,10 +13,33 @@ export default function SettingsPage({ onBack, onResetPin, onOpenProtect, onOpen
   const [bioSupported, setBioSupported] = useState(false)
   const [bioEnabled, setBioEnabled] = useState(isBiometricEnrolled())
   const [bioBusy, setBioBusy] = useState(false)
+  const [notifOn, setNotifOn] = useState(isNotifOptedIn())
+  const [notifBusy, setNotifBusy] = useState(false)
 
   useEffect(() => {
     isBiometricAvailable().then(setBioSupported)
   }, [])
+
+  const toggleNotifs = async () => {
+    if (notifBusy) return
+    setNotifBusy(true)
+    try {
+      if (notifOn) {
+        setNotifOptIn(false)
+        setNotifOn(false)
+        toast?.('Expiry alerts turned off')
+      } else {
+        const perm = await requestNotificationPermission()
+        if (perm === 'denied') {
+          toast?.('Browser blocked notifications — enable in browser settings')
+        } else {
+          setNotifOptIn(true)
+          setNotifOn(true)
+          toast?.('Expiry alerts turned on · 3 days + 1 day before')
+        }
+      }
+    } finally { setNotifBusy(false) }
+  }
 
   const toggleBiometric = async () => {
     if (bioBusy) return
@@ -72,6 +96,34 @@ export default function SettingsPage({ onBack, onResetPin, onOpenProtect, onOpen
           <p className="font-display font-bold text-ink-900 mb-2">App PIN</p>
           <p className="text-xs text-ink-500 mb-3">PIN is stored locally on this device only. Cloud account stays signed in across devices.</p>
           <GhostButton data-testid="reset-pin" onClick={onResetPin}><KeyRound className="w-4 h-4" /> Change PIN</GhostButton>
+        </Card>
+
+        <Card className="p-5" data-testid="settings-notifications-card">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gold-50 grid place-items-center shrink-0">
+              <Bell className="w-5 h-5 text-gold-700" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-display font-bold text-ink-900">Expiry alerts</p>
+              <p className="text-xs text-ink-500 mt-0.5 leading-relaxed">
+                Two reminders per voucher — exactly <strong>3 days</strong> and <strong>1 day</strong> before expiry.
+                Never spammy. Quiet hours from 10pm to 8am respected automatically.
+              </p>
+              <button
+                data-testid="notif-toggle"
+                onClick={toggleNotifs}
+                disabled={notifBusy}
+                className={`mt-3 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide px-4 py-2.5 rounded-full active:scale-95 transition disabled:opacity-60 ${
+                  notifOn
+                    ? 'bg-ink-100 text-ink-800 border border-ink-200'
+                    : 'bg-emerald-800 text-white'
+                }`}
+              >
+                <Bell className="w-3.5 h-3.5" />
+                {notifBusy ? 'Working…' : (notifOn ? 'Turn off alerts' : 'Turn on alerts')}
+              </button>
+            </div>
+          </div>
         </Card>
 
         {bioSupported && (

@@ -40,9 +40,9 @@ export default function ProfileMenu({ open, onClose, onNavigate, memberStatus })
         <button data-testid="menu-card-optimizer" onClick={() => { onNavigate('card-optimizer'); onClose() }} className="w-full flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-ink-50">
           <div className="flex items-center gap-3">
             <CreditCard className="w-4 h-4 text-emerald-700" />
-            <span className="text-sm font-semibold text-ink-800">Card Optimizer</span>
+            <span className="text-sm font-semibold text-ink-800">Savings Assistant</span>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-2 py-0.5">New</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-2 py-0.5">Cards</span>
         </button>
         <button data-testid="menu-circle" onClick={() => { onNavigate('circle'); onClose() }} className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-ink-50">
           <UserPlus className="w-4 h-4 text-ink-700" />
