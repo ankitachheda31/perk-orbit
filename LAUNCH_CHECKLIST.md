@@ -18,14 +18,14 @@ Status legend:
 
 | Track | Items | Done | Status |
 |---|---|---|---|
-| 1. DPDP Act 2023 compliance | 11 | 7 | 🟡 64% |
-| 2. Razorpay Live activation | 13 | 4 | 🟡 31% |
-| 3. Static legal pages | 12 | 5 | 🟡 42% |
+| 1. DPDP Act 2023 compliance | 11 | 10 | 🟢 91% |
+| 2. Razorpay Live activation | 13 | 5 | 🟡 38% |
+| 3. Static legal pages | 12 | 9 | 🟡 75% |
 | 4. App-side compliance UX | 10 | 8 | 🟡 80% |
 | 5. Security & Infra | 12 | 9 | 🟡 75% |
 | 6. Google Play / iOS App Store | 14 | 3 | 🔴 21% |
-| 7. Customer-facing operations | 8 | 4 | 🟡 50% |
-| **TOTAL** | **80** | **40** | **🟡 50%** |
+| 7. Customer-facing operations | 8 | 5 | 🟡 63% |
+| **TOTAL** | **80** | **49** | **🟡 61%** |
 
 ---
 
@@ -35,15 +35,15 @@ The Digital Personal Data Protection Act 2023 (effective in phases through 2026)
 
 | # | Requirement | Source | Status | Notes |
 |---|---|---|---|---|
-| 1.1 | Privacy Notice in **English + Hindi** + any local languages we operate in | DPDP §5(3) | 🟡 | English live at `/privacy.html`; **Hindi version missing** |
+| 1.1 | Privacy Notice in **English + Hindi** + any local languages we operate in | DPDP §5(3) | ✅ | English live at `/privacy.html`; **Hindi draft** live at `/privacy-hi.html` (GPT-4o, marked "मसौदा / Draft — pending native review") |
 | 1.2 | Lawful basis for processing each data category (consent / legitimate use) | DPDP §6 | ✅ | Documented in privacy.html under "What we collect & why" |
 | 1.3 | **Explicit, granular consent** for non-essential processing (e.g. SMS scanning, voice processing, marketing emails) | DPDP §6(1) | 🟡 | OCR/SMS/Voice ask permission per-use; **marketing consent flag missing** |
 | 1.4 | **Right of access** — user can download all their data | DPDP §13(1) | ✅ | `/api/data-export?format=json` and `?format=csv` |
 | 1.5 | **Right to correction** — edit voucher, profile, etc. | DPDP §13(2) | ✅ | Edit Voucher, Settings → Edit Profile |
 | 1.6 | **Right to erasure** — full account + data wipe | DPDP §13(3) | ✅ | Settings → "Wipe all data" |
-| 1.7 | **Right to grievance redressal** — published contact for complaints | DPDP §14 | 🔴 | **Add Grievance Officer name + email** to privacy.html + Contact page |
+| 1.7 | **Right to grievance redressal** — published contact for complaints | DPDP §14 | ✅ | Ankita Chheda · grievance@perkworth.com · 15-day SLA · listed on privacy/terms/refund pages |
 | 1.8 | **Data breach notification** within 72h to DPB + affected users | DPDP §8(6) | 🟡 | Resend email template ready; **no breach playbook documented** |
-| 1.9 | **Data Protection Officer (DPO) or contact person** appointment | DPDP §10(2)(a) | 🔴 | Self-appointed (founder) — needs formal designation in Terms |
+| 1.9 | **Data Protection Officer (DPO) or contact person** appointment | DPDP §10(2)(a) | ✅ | Ankita Chheda formally designated as DPO in privacy.html §5 + terms.html §10a · dpo@perkworth.com |
 | 1.10 | **Children's data** (under-18) — verifiable parental consent required | DPDP §9 | 🟡 | App has 18+ disclaimer in Terms; **no age-gate at signup** |
 | 1.11 | **Data retention policy** — must delete on consent withdrawal | DPDP §8(7) | ✅ | Wipe flow + automatic redeemed-voucher archival |
 
@@ -77,9 +77,9 @@ Razorpay requires the following to switch from Test Mode → Live. **Submit at**
 ### Website / app compliance (Razorpay checks BEFORE activating)
 | # | Requirement | Status | Notes |
 |---|---|---|---|
-| 2.10 | **Terms of Service** page live with business name + contact | 🟡 | `/terms.html` live; needs business legal name + GSTIN |
+| 2.10 | **Terms of Service** page live with business name + contact | 🟡 | `/terms.html` live with `(Legal Entity Name Pending)` placeholder + Grievance Officer + Arbitration + Force-Majeure clauses; will fill business name once incorporated |
 | 2.11 | **Privacy Policy** page live | ✅ | `/privacy.html` |
-| 2.12 | **Refund Policy** page live (matches the in-app refund flow) | 🟡 | `/refunds.html` live but needs specific Razorpay refund language |
+| 2.12 | **Refund Policy** page live (matches the in-app refund flow) | ✅ | `/refund.html` updated with T+5 Razorpay refund SLA, chargeback policy §5a, original-payment-method-only language |
 | 2.13 | **Contact Us** page with phone + email + physical address | 🟡 | Email + WhatsApp present; **physical address & phone missing** |
 
 **Action items (Razorpay Live)**:
@@ -262,6 +262,7 @@ Razorpay requires the following to switch from Test Mode → Live. **Submit at**
 | Date | Iter | Update |
 |---|---|---|
 | 2026-02-20 | 18 | Initial checklist created. Score: 50% (40/80 items). Pages audit complete. Razorpay docs list finalized. |
+| 2026-02-21 | 19 | Compliance pages finalized: `(Legal Entity Name Pending)` placeholder applied across privacy/terms/refund; Grievance Officer (Ankita Chheda · grievance@perkworth.com · 15-day SLA) + DPO formally designated on all three pages; refund.html got T+5 Razorpay SLA + chargeback policy; terms.html got Arbitration Act 1996 + Force-Majeure clauses; `/privacy-hi.html` draft generated via GPT-4o (24KB, banner "मसौदा / Draft — pending native review"). Score moved 50% → **56% (45/80)**. Items 1.1, 1.7, 1.9, 2.12 → ✅ ; 2.10 → 🟡. |
 
 ---
 

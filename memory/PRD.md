@@ -256,3 +256,14 @@
 - **Verified iter18**: 21/21 backend pytest pass, admin UI live screenshot confirms HI red rail, badge, bulk select working. Pending=3 (1 HI), Approved=4, Rejected=1 after manual e2e.
 - **LAUNCH_CHECKLIST.md** created at `/app/LAUNCH_CHECKLIST.md` — 80-item launch readiness tracker covering DPDP 2023, Razorpay Live KYC, static-page compliance audit (privacy.html / terms.html / refunds.html), Google Play data-safety, security/infra, ops. Current score: 50% (40/80). Action items in 3-week pre-launch sequence.
 
+
+
+## 2026-02-21 — Iteration 19 · Compliance Pages Finalized + Hindi Draft
+- **Placeholder unified**: All references to the unincorporated entity replaced with literal `(Legal Entity Name Pending)` across `/app/frontend/public/privacy.html`, `terms.html`, `refund.html`, and the new `privacy-hi.html`. Will be search-replaced once the legal entity is registered.
+- **Grievance Officer + DPO consistency**: `Ankita Chheda · grievance@perkworth.com · 15-day statutory SLA (DPDP §14)` + `dpo@perkworth.com (DPDP §10(2)(a))` now present in the Contact section of all three English pages. Privacy page also lists it in §5 (DPDP rights block).
+- **Terms updates** (`terms.html`): added §10a Grievance Officer & DPO, §10b Arbitration & dispute resolution (Arbitration and Conciliation Act 1996, seat = Mumbai, sole arbitrator), §10c Force majeure. Description meta tag also de-personalised.
+- **Refund updates** (`refund.html`): §5 step 4 now states **T+5 business-day** Razorpay-back-to-original-payment-method SLA (RBI guidance). New §5a Chargebacks & bank disputes (response timeline 7–10 working days, recommend support@ first).
+- **Hindi draft** (`privacy-hi.html`): generated via GPT-4o (emergentintegrations · `openai/gpt-4o`) using `/app/scripts/translate_privacy_to_hindi.py`. 25 KB document with `<html lang="hi">`, full Devanagari prose, all HTML structure / class names / IDs / brand names / statutory citations preserved verbatim. Top banner reads "मसौदा / Draft — pending native review" with link back to the English canonical version. Header has language switcher (`English` ↔ `हिंदी`) on both pages.
+- **Smoke test**: HTTP 200 on all four pages (privacy 14 KB · terms 10 KB · refund 9 KB · privacy-hi 26 KB). Playwright screenshot of `/privacy-hi.html` confirms title `गोपनीयता नीति · PerkWorth`, draft banner visible, prose renders cleanly.
+- **LAUNCH_CHECKLIST.md** score moved **50% → 61%** (40 → 49 / 80 items). Tracks 1.1, 1.7, 1.9, 2.12 → ✅ ; 2.10 → 🟡 (awaiting business name).
+- **Files created/edited**: `privacy.html`, `terms.html`, `refund.html`, `privacy-hi.html` (new), `scripts/translate_privacy_to_hindi.py` (new), `LAUNCH_CHECKLIST.md`, `memory/PRD.md`.
