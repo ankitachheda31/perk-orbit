@@ -53,146 +53,24 @@ if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
     _rzp_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # ---------------------------------------------------------------------------
-# PyObjectId helper
+# PyObjectId helper + Pydantic models — moved to models.py
 # ---------------------------------------------------------------------------
-def _validate_object_id(v: Any) -> str:
-    if isinstance(v, ObjectId):
-        return str(v)
-    if isinstance(v, str) and ObjectId.is_valid(v):
-        return v
-    raise ValueError("Invalid ObjectId")
-
-
-PyObjectId = Annotated[str, BeforeValidator(_validate_object_id)]
-
-
-class BaseDocument(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
-
-    id: Optional[PyObjectId] = Field(default=None, alias="_id")
-
-    @classmethod
-    def from_mongo(cls, doc: dict | None):
-        if not doc:
-            return None
-        return cls(**doc)
-
-    def to_mongo(self) -> dict:
-        data = self.model_dump(by_alias=True, exclude_none=True)
-        if "_id" in data and data["_id"] is not None:
-            data["_id"] = ObjectId(data["_id"])
-        else:
-            data.pop("_id", None)
-        return data
-
-
-# ---------------------------------------------------------------------------
-# Models
-# ---------------------------------------------------------------------------
-class Voucher(BaseDocument):
-    user_pin: str = Field(..., description="PIN hash / user identifier")
-    type: str = Field(..., description="voucher | membership")
-    brand: str
-    parent_company: Optional[str] = None
-    title: str
-    code: Optional[str] = None
-    value: Optional[float] = None
-    value_currency: str = "INR"
-    points: Optional[int] = None
-    expiry: Optional[str] = None  # ISO date YYYY-MM-DD
-    start_date: Optional[str] = None  # ISO date — membership start, used for ROI math
-    category: str = "vouchers"  # vouchers | memberships
-    membership_kind: Optional[str] = None  # asset | content
-    fee_paid: Optional[float] = None  # for asset memberships
-    benefit_rate: Optional[float] = None  # 0..1 decimal — e.g. 0.10 = 10% discount
-    total_spend: Optional[float] = 0.0    # cumulative ₹ spent under this membership
-    savings_realized: Optional[float] = 0.0
-    how_to_redeem: Optional[str] = None
-    notes: Optional[str] = None
-    owner: Optional[str] = "Self"  # Self | Spouse | Husband | Wife | Father | Mother | Brother | Sister | Sister-in-law | Brother-in-law | Son | Daughter | Other
-    status: Optional[str] = "active"  # active | redeemed | expired
-    redeemed_at: Optional[str] = None  # ISO timestamp when marked redeemed
-    shared_with: List[str] = Field(default_factory=list)
-    is_sharing: bool = False
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
-
-class VoucherCreate(BaseModel):
-    user_pin: str
-    type: str = "voucher"
-    brand: str
-    parent_company: Optional[str] = None
-    title: str
-    code: Optional[str] = None
-    value: Optional[float] = None
-    points: Optional[int] = None
-    expiry: Optional[str] = None
-    start_date: Optional[str] = None
-    category: str = "vouchers"
-    membership_kind: Optional[str] = None
-    fee_paid: Optional[float] = None
-    benefit_rate: Optional[float] = None
-    total_spend: Optional[float] = 0.0
-    savings_realized: Optional[float] = 0.0
-    how_to_redeem: Optional[str] = None
-    notes: Optional[str] = None
-    owner: Optional[str] = "Self"
-
-
-class VoucherUpdate(BaseModel):
-    brand: Optional[str] = None
-    parent_company: Optional[str] = None
-    title: Optional[str] = None
-    code: Optional[str] = None
-    value: Optional[float] = None
-    points: Optional[int] = None
-    expiry: Optional[str] = None
-    start_date: Optional[str] = None
-    category: Optional[str] = None
-    membership_kind: Optional[str] = None
-    fee_paid: Optional[float] = None
-    benefit_rate: Optional[float] = None
-    total_spend: Optional[float] = None
-    savings_realized: Optional[float] = None
-    how_to_redeem: Optional[str] = None
-    notes: Optional[str] = None
-    owner: Optional[str] = None
-    status: Optional[str] = None
-    redeemed_at: Optional[str] = None
-    is_sharing: Optional[bool] = None
-    shared_with: Optional[List[str]] = None
-
-
-class OCRTextInput(BaseModel):
-    text: str
-    user_pin: Optional[str] = None
-
-
-class OCRImageBase64Input(BaseModel):
-    image_base64: str
-    user_pin: Optional[str] = None
-
-
-class ShareInviteCreate(BaseModel):
-    user_pin: str
-    voucher_id: str
-    family_member_id: str  # ID of the circle member from /api/circle/members
-
-
-class FamilyCircleMember(BaseDocument):
-    user_pin: str
-    name: str
-    relation: Optional[str] = None
-    invite_token: str
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
-
-class FamilyCircleAdd(BaseModel):
-    user_pin: str
-    name: str
-    relation: Optional[str] = None
-    email: Optional[EmailStr] = None
-    inviter_name: Optional[str] = None
+from models import (  # noqa: E402  (centralized models module)
+    PyObjectId,
+    BaseDocument,
+    Voucher,
+    VoucherCreate,
+    VoucherUpdate,
+    OCRTextInput,
+    OCRImageBase64Input,
+    ShareInviteCreate,
+    FamilyCircleMember,
+    FamilyCircleAdd,
+    LogSpendBody,
+    RzpOrderRequest,
+    RzpVerifyRequest,
+    SupportLog,
+)
 
 
 # ---------------------------------------------------------------------------
