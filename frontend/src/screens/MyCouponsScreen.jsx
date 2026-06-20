@@ -8,11 +8,12 @@ import { getProfile } from '../lib/store'
 import { fmtINR } from '../lib/format'
 import usePullToRefresh from '../lib/usePullToRefresh'
 
-export default function MyCouponsScreen({ pin, onProfileClick, onOpenAdd, toast, refreshKey, openHowTo, openShareSheet, setRefreshKey, bumpRefresh }) {
+export default function MyCouponsScreen({ pin, onProfileClick, onOpenAdd, onOpenEdit, toast, refreshKey, openHowTo, openShareSheet, setRefreshKey, bumpRefresh }) {
   const [tab, setTab] = useState('all')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [roi, setRoi] = useState([])
+  const [ownerFilter, setOwnerFilter] = useState('all')  // 'all' | <Owner name>
 
   const load = async () => {
     setLoading(true)
@@ -32,6 +33,23 @@ export default function MyCouponsScreen({ pin, onProfileClick, onOpenAdd, toast,
     } finally { setLoading(false) }
   }
   useEffect(() => { load() /* eslint-disable-next-line */ }, [pin, tab, refreshKey])
+
+  // Derive owners present in current items list (preserve insertion order, default to 'Self')
+  const ownersInList = React.useMemo(() => {
+    const seen = new Set()
+    const out = []
+    for (const v of items) {
+      const o = v.owner || 'Self'
+      if (!seen.has(o)) { seen.add(o); out.push(o) }
+    }
+    return out
+  }, [items])
+
+  // Apply owner filter
+  const visibleItems = React.useMemo(() => {
+    if (ownerFilter === 'all') return items
+    return items.filter(v => (v.owner || 'Self') === ownerFilter)
+  }, [items, ownerFilter])
 
   const { pullY, refreshing } = usePullToRefresh(async () => { await load(); bumpRefresh?.() })
 
@@ -77,18 +95,60 @@ export default function MyCouponsScreen({ pin, onProfileClick, onOpenAdd, toast,
           <button data-testid="tab-vouchers" className={`pill-tab ${tab === 'vouchers' ? 'active' : ''}`} onClick={() => setTab('vouchers')}>Vouchers</button>
         </div>
 
+        {/* OWNER FILTER — only render if 2+ distinct owners exist (multi-person household) */}
+        {ownersInList.length >= 2 ? (
+          <div data-testid="owner-filter-row" className="-mx-5 px-5 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1.5 pb-1 min-w-max">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-ink-500 pr-1 whitespace-nowrap">Filter:</span>
+              <button
+                data-testid="owner-filter-all"
+                onClick={() => setOwnerFilter('all')}
+                className={`text-[11px] font-semibold px-3 py-1.5 rounded-full border whitespace-nowrap transition active:scale-95 ${
+                  ownerFilter === 'all'
+                    ? 'bg-emerald-800 text-white border-emerald-800'
+                    : 'bg-white text-ink-700 border-ink-200 hover:border-emerald-700'
+                }`}
+              >
+                All ({items.length})
+              </button>
+              {ownersInList.map(o => {
+                const count = items.filter(v => (v.owner || 'Self') === o).length
+                const active = ownerFilter === o
+                return (
+                  <button
+                    key={o}
+                    data-testid={`owner-filter-${o.toLowerCase().replace(/\s+/g, '-')}`}
+                    onClick={() => setOwnerFilter(o)}
+                    className={`text-[11px] font-semibold px-3 py-1.5 rounded-full border whitespace-nowrap transition active:scale-95 ${
+                      active
+                        ? 'bg-emerald-800 text-white border-emerald-800'
+                        : 'bg-white text-ink-700 border-ink-200 hover:border-emerald-700'
+                    }`}
+                  >
+                    👤 {o} ({count})
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+
         <button data-testid="add-coupon" onClick={() => onOpenAdd()} className="w-full bg-white border-2 border-dashed border-ink-200 hover:border-emerald-700 hover:bg-emerald-50/30 py-4 rounded-2xl flex items-center justify-center gap-2 text-emerald-800 font-semibold transition active:scale-[0.98]">
           <Plus className="w-4 h-4" /> Add new
         </button>
 
         {loading ? (
           <div className="space-y-3">{[0, 1, 2].map(i => <div key={i} className="h-24 bg-white rounded-3xl border border-ink-200 animate-pulse" />)}</div>
-        ) : items.length === 0 ? (
-          <Empty title="Nothing here yet" sub="Add your first voucher or membership card." icon={<Ticket className="w-6 h-6" />} testid="empty-coupons" />
+        ) : visibleItems.length === 0 ? (
+          ownerFilter !== 'all' ? (
+            <Empty title={`No items for ${ownerFilter}`} sub={`Switch back to "All" or add a voucher owned by ${ownerFilter}.`} icon={<Ticket className="w-6 h-6" />} testid="empty-owner-filter" />
+          ) : (
+            <Empty title="Nothing here yet" sub="Add your first voucher or membership card." icon={<Ticket className="w-6 h-6" />} testid="empty-coupons" />
+          )
         ) : (
           <div className="space-y-3">
-            {items.map(v => v.category === 'memberships' ? (
-              <MembershipCard key={v.id} m={roi.find(r => r.id === v.id) || v} onUpdateSavings={logSavings} />
+            {visibleItems.map(v => v.category === 'memberships' ? (
+              <MembershipCard key={v.id} m={roi.find(r => r.id === v.id) || v} onUpdateSavings={logSavings} onEdit={() => onOpenEdit?.(v)} />
             ) : (
               <VoucherCard
                 key={v.id} v={v} pin={pin}
@@ -96,6 +156,7 @@ export default function MyCouponsScreen({ pin, onProfileClick, onOpenAdd, toast,
                 onDelete={handleDelete}
                 onShare={() => openShareSheet(v)}
                 onUnshare={handleUnshare}
+                onEdit={() => onOpenEdit?.(v)}
               />
             ))}
           </div>

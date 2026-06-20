@@ -186,7 +186,7 @@ function OwnerPicker({ value, onChange }) {
 
 
 
-export default function AddVoucherSheet({ open, onClose, pin, onSaved, toast }) {
+export default function AddVoucherSheet({ open, onClose, pin, onSaved, toast, editing }) {
   const [mode, setMode] = useState('manual')
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({ brand: '', title: '', code: '', value: '', expiry: '', start_date: '', category: 'vouchers', membership_kind: '', fee_paid: '', benefit_rate: '', how_to_redeem: '', notes: '', owner: 'Self' })
@@ -229,6 +229,34 @@ export default function AddVoucherSheet({ open, onClose, pin, onSaved, toast }) 
     setForm({ brand: '', title: '', code: '', value: '', expiry: '', start_date: '', category: 'vouchers', membership_kind: '', fee_paid: '', benefit_rate: '', how_to_redeem: '', notes: '', owner: 'Self' })
     setSmsText(''); setImagePreview(null); setMode('manual'); setParentBrand(null); setDateError('')
   }
+
+  // When `editing` voucher prop changes, prefill the form. When it clears, reset.
+  React.useEffect(() => {
+    if (editing && open) {
+      setMode('manual')
+      setForm({
+        brand: editing.brand || '',
+        title: editing.title || '',
+        code: editing.code || '',
+        value: editing.value != null ? String(editing.value) : '',
+        expiry: editing.expiry || '',
+        start_date: editing.start_date || '',
+        category: editing.category || 'vouchers',
+        membership_kind: editing.membership_kind || '',
+        fee_paid: editing.fee_paid != null ? String(editing.fee_paid) : '',
+        // benefit_rate is stored as decimal (0-1) but UI uses percent (0-100)
+        benefit_rate: editing.benefit_rate != null ? String(Math.round(editing.benefit_rate * 100)) : '',
+        how_to_redeem: editing.how_to_redeem || '',
+        notes: editing.notes || '',
+        owner: editing.owner || 'Self',
+      })
+    } else if (!open) {
+      reset()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, open])
+
+  const isEditMode = !!editing
 
   const handleSave = async () => {
     if (!form.brand || !form.title) { toast('Brand and title are required'); return }

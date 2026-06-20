@@ -1,5 +1,5 @@
 import React from 'react'
-import { Copy, Clock, KeyRound, Share2, Trash2, MessageSquareText, BadgeCheck } from 'lucide-react'
+import { Copy, Clock, KeyRound, Share2, Trash2, MessageSquareText, BadgeCheck, Pencil } from 'lucide-react'
 import { Tag } from './ui'
 import { daysUntil, fmtDate, fmtINR } from '../lib/format'
 import { WA_SUPPORT_NUMBER } from '../lib/constants'
@@ -22,7 +22,7 @@ export async function logSupportThenOpenWa(v, pin) {
   window.open(buildWaHelpUrl(v), '_blank', 'noopener,noreferrer')
 }
 
-export function VoucherCard({ v, onCopy, onHowTo, onDelete, onShare, onUnshare, pin }) {
+export function VoucherCard({ v, onCopy, onHowTo, onDelete, onShare, onUnshare, onEdit, pin }) {
   const dleft = daysUntil(v.expiry)
   const endingSoon = dleft != null && dleft <= 7 && dleft >= 0
   return (
@@ -61,6 +61,11 @@ export function VoucherCard({ v, onCopy, onHowTo, onDelete, onShare, onUnshare, 
         <button data-testid={`share-${v.id}`} onClick={() => v.is_sharing ? onUnshare(v) : onShare(v)} className="text-xs font-semibold text-ink-700 bg-ink-100 hover:bg-ink-200 py-2 px-3 rounded-full active:scale-95 transition flex items-center justify-center">
           <Share2 className="w-3.5 h-3.5" />
         </button>
+        {onEdit ? (
+          <button data-testid={`edit-${v.id}`} onClick={() => onEdit(v)} className="text-xs font-semibold text-ink-700 bg-ink-100 hover:bg-ink-200 py-2 px-3 rounded-full active:scale-95 transition flex items-center justify-center" title="Edit voucher">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        ) : null}
         <a
           data-testid={`wa-help-${v.id}`}
           href={buildWaHelpUrl(v)}
@@ -79,7 +84,7 @@ export function VoucherCard({ v, onCopy, onHowTo, onDelete, onShare, onUnshare, 
   )
 }
 
-export function MembershipCard({ m, onUpdateSavings }) {
+export function MembershipCard({ m, onUpdateSavings, onEdit }) {
   const kind = m.membership_kind || 'asset'
   const isAsset = kind === 'asset'
   const fee = m.fee_paid || 0
@@ -186,6 +191,11 @@ export function MembershipCard({ m, onUpdateSavings }) {
           <p className="text-[11px] text-white/70 mt-2">Content subscription — ROI tracked via time/cost-per-day above</p>
         </div>
       )}
+      {onEdit ? (
+        <button data-testid={`edit-${m.id}`} onClick={() => onEdit(m)} className="absolute top-3 right-3 bg-white/10 hover:bg-white/20 text-white p-1.5 rounded-full active:scale-95 transition" title="Edit membership">
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+      ) : null}
     </div>
   )
 }
