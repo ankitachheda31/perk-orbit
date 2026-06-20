@@ -1,13 +1,42 @@
-import React, { useState } from 'react'
-import { ShieldCheck, KeyRound, ChevronRight, FileText, MessageCircle, Lock, Sparkles, LogOut, Trash2, AlertTriangle } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { ShieldCheck, KeyRound, ChevronRight, FileText, MessageCircle, Lock, Sparkles, LogOut, Trash2, AlertTriangle, Fingerprint } from 'lucide-react'
 import { Card, GhostButton, TopBar } from '../components/ui'
 import { Auth } from '../lib/api'
 import { setStoredPin, setProfile } from '../lib/store'
+import { isBiometricAvailable, isBiometricEnrolled, enrollBiometric, disableBiometric } from '../lib/biometric'
 
 export default function SettingsPage({ onBack, onResetPin, onOpenProtect, onOpenPrivacy, onOpenFAQ, onOpenPrivacyControl, onOpenPerkTips, onReplayTour, onWipe, onLogout, toast }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [busy, setBusy] = useState(false)
+  const [bioSupported, setBioSupported] = useState(false)
+  const [bioEnabled, setBioEnabled] = useState(isBiometricEnrolled())
+  const [bioBusy, setBioBusy] = useState(false)
+
+  useEffect(() => {
+    isBiometricAvailable().then(setBioSupported)
+  }, [])
+
+  const toggleBiometric = async () => {
+    if (bioBusy) return
+    setBioBusy(true)
+    try {
+      if (bioEnabled) {
+        disableBiometric()
+        setBioEnabled(false)
+        toast?.('Biometric unlock disabled')
+      } else {
+        await enrollBiometric()
+        setBioEnabled(true)
+        toast?.('Biometric unlock enabled')
+      }
+    } catch (e) {
+      const msg = e?.name === 'NotAllowedError' ? 'Biometric setup cancelled' : 'Could not set up biometric'
+      toast?.(msg)
+    } finally {
+      setBioBusy(false)
+    }
+  }
   const wipe = async () => {
     setBusy(true)
     try {
@@ -44,6 +73,35 @@ export default function SettingsPage({ onBack, onResetPin, onOpenProtect, onOpen
           <p className="text-xs text-ink-500 mb-3">PIN is stored locally on this device only. Cloud account stays signed in across devices.</p>
           <GhostButton data-testid="reset-pin" onClick={onResetPin}><KeyRound className="w-4 h-4" /> Change PIN</GhostButton>
         </Card>
+
+        {bioSupported && (
+          <Card className="p-5" data-testid="settings-biometric-card">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 grid place-items-center shrink-0">
+                <Fingerprint className="w-5 h-5 text-emerald-800" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-display font-bold text-ink-900">Biometric unlock</p>
+                <p className="text-xs text-ink-500 mt-0.5 leading-relaxed">
+                  Unlock with Face ID / Fingerprint. PIN stays as backup — your cloud account is always recoverable.
+                </p>
+                <button
+                  data-testid="biometric-toggle"
+                  onClick={toggleBiometric}
+                  disabled={bioBusy}
+                  className={`mt-3 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide px-4 py-2.5 rounded-full active:scale-95 transition disabled:opacity-60 ${
+                    bioEnabled
+                      ? 'bg-ink-100 text-ink-800 border border-ink-200'
+                      : 'bg-emerald-800 text-white'
+                  }`}
+                >
+                  <Fingerprint className="w-3.5 h-3.5" />
+                  {bioBusy ? 'Working…' : (bioEnabled ? 'Disable biometric' : 'Enable biometric')}
+                </button>
+              </div>
+            </div>
+          </Card>
+        )}
 
         <Card className="p-5">
           <p className="font-display font-bold text-ink-900 mb-2">Privacy & legal</p>

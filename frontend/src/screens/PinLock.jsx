@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { Fingerprint } from 'lucide-react'
+import { isBiometricEnrolled, isBiometricAvailable, verifyBiometric } from '../lib/biometric'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'back']
 
@@ -8,6 +10,9 @@ export default function PinLock({ mode = 'verify', expected, onSuccess }) {
   const [stage, setStage] = useState(mode === 'set' ? 'create' : 'verify') // create -> confirm -> done
   const [confirmPin, setConfirmPin] = useState('')
   const [error, setError] = useState('')
+  const [bioReady, setBioReady] = useState(false)
+  const [bioBusy, setBioBusy] = useState(false)
+  const bioAttempted = useRef(false)
 
   const len = 4
 
@@ -41,6 +46,40 @@ export default function PinLock({ mode = 'verify', expected, onSuccess }) {
     }
   }, [pin, confirmPin, stage, expected, onSuccess])
 
+  // Detect biometric availability + auto-prompt on first mount in verify mode
+  useEffect(() => {
+    if (mode !== 'verify') return
+    let cancelled = false
+    ;(async () => {
+      const supported = await isBiometricAvailable()
+      const enrolled = isBiometricEnrolled()
+      if (cancelled) return
+      const ready = supported && enrolled
+      setBioReady(ready)
+      // Auto-trigger once on first mount — feels native, like a banking app
+      if (ready && !bioAttempted.current) {
+        bioAttempted.current = true
+        await tryBiometric()
+      }
+    })()
+    return () => { cancelled = true }
+  }, [mode])
+
+  const tryBiometric = async () => {
+    if (bioBusy) return
+    setBioBusy(true)
+    setError('')
+    try {
+      const ok = await verifyBiometric()
+      if (ok && expected) onSuccess(expected)
+    } catch (e) {
+      // Hard failure — show fallback to PIN. Don't surface error to user.
+      console.warn('[biometric] verify failed', e)
+    } finally {
+      setBioBusy(false)
+    }
+  }
+
   const visible = stage === 'confirm' ? confirmPin : pin
 
   const title = stage === 'verify' ? 'Welcome back' : stage === 'create' ? 'Set a 4-digit PIN' : 'Confirm your PIN'
@@ -64,6 +103,20 @@ export default function PinLock({ mode = 'verify', expected, onSuccess }) {
           ))}
         </div>
         <div className="text-center text-xs text-terracotta-700 h-5 mt-3" data-testid="pin-error">{error}</div>
+
+        {bioReady && stage === 'verify' && (
+          <div className="flex justify-center mt-2 mb-1">
+            <button
+              data-testid="biometric-trigger"
+              onClick={tryBiometric}
+              disabled={bioBusy}
+              className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-800 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-200 active:scale-95 transition disabled:opacity-60"
+            >
+              <Fingerprint className="w-4 h-4" />
+              {bioBusy ? 'Verifying…' : 'Unlock with biometric'}
+            </button>
+          </div>
+        )}
 
         <div className="mt-auto grid grid-cols-3 gap-3" data-testid="pin-keypad">
           {KEYS.map((k, idx) => (
