@@ -12,6 +12,13 @@
 - **Password**: `PerkOrbit@2026`
 - Seeded via `ADMIN_EMAIL` / `ADMIN_PASSWORD` env (run `/api/auth/signup` once to create on first boot)
 
+## Razorpay KYC Reviewer Account (created 2026-02-21)
+- **Email**: `reviewer@perkworth.com`
+- **Password**: `PerkReview@2026`
+- **Purpose**: Test credentials shared with Razorpay during Website verification ("Submit details for verification" → "Add test account username / password" field). Razorpay reviewers use this to log in and verify the ₹99/quarter payment flow exists and works.
+- **Pre-seeded** with 3 sample vouchers (Swiggy / Amazon / BookMyShow) + 1 active Tata Neu membership so the reviewer sees a populated wallet, not an empty state.
+- **Safe to share publicly** — no personal data, no admin role, contains only seeded demo content. Revoke after KYC clears.
+
 ## Device-level PIN (per device, set after first cloud login)
 - Test PIN: `1234`
 - New device: any PIN you set (e.g. `9999`)
