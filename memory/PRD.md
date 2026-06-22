@@ -341,3 +341,23 @@
   - Valid HMAC-SHA256(order_id|payment_id, KEY_SECRET) → Pro activated, payment marked paid, welcome notification fired (✅)
 - Health 14/14 · `pytest backend/tests` 21/21 functional flows pass · backend reloaded clean.
 - **No new code files created** — full Razorpay Standard Checkout integration was already present (`routes/billing.py`, `services/db.py::verify_razorpay_signature`, `frontend/src/lib/razorpay.js`); only env credentials updated + one defensive validation line added.
+
+
+## 2026-02-22 — Iteration 23 · Admin force-logout panic button + token-version invalidation
+- **New JWT claim**: `tv` (token_version, defaults 0). Issued by `create_access_token(uid, email, token_version)` and `create_refresh_token(uid, token_version)` in `auth_intel.py`.
+- **`users` document gains `token_version: int = 0`** field on signup. Existing users start at implicit 0 (treated as 0 when field absent via `int(user.get("token_version") or 0)`).
+- **Token validation hot-path** (`make_get_current_user` in `auth_intel.py`): compares `payload.get("tv", 0)` against `user.token_version` from DB on every authenticated request. If token's tv < user's tv → HTTP 401 `Session revoked. Please log in again.`
+- **New endpoint**: `POST /api/admin/force-logout` (admin-only) in `routes/admin_dashboard.py`. Body `{"email": "..."}`. Increments `users.token_version` by 1, stamps `last_force_logout_at`. Returns `{ok, email, user_id, previous_token_version, new_token_version, users_updated}`.
+- **Side effects covered**:
+  - Login now passes the current `token_version` into both tokens issued.
+  - Password-reset bumps `token_version` by 1 (security best practice — changing password invalidates every prior session globally).
+- **Live test against preview** with new keys:
+  - Reviewer logs in → token carries `tv: 0` ✅
+  - Admin POSTs `/force-logout {email: "reviewer@..."}` → 200 + `new_token_version: 1` ✅
+  - Old reviewer token → 401 `Session revoked. Please log in again.` ✅
+  - Reviewer logs in fresh → new token carries `tv: 1` and `/auth/me` returns 200 ✅
+  - Anonymous → 401, non-admin caller → 403, unknown email → 404, missing email → 400 ✅
+  - Backward-compat: `/api/admin/dashboard/stats` still resolves at the same path despite router prefix collapse from `/api/admin/dashboard` to `/api/admin` ✅
+- **Tests**: `backend/tests/test_force_logout.py` adds 4 cases covering all auth gates + end-to-end old-token-invalidation. **25/25 backend tests pass** · health 14/14 · lint clean.
+- **Files modified**: `auth_intel.py` (signature changes for `create_access_token` / `create_refresh_token` + tv check in `get_current_user` + `token_version` field on signup + login passes tv + password-reset bumps tv), `routes/admin_dashboard.py` (router prefix `/api/admin/dashboard` → `/api/admin`; `/dashboard/stats` path preserved; new `POST /force-logout`).
+- **Files created**: `backend/tests/test_force_logout.py`.

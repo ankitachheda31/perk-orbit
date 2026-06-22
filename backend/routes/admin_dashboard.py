@@ -1,14 +1,16 @@
-"""Admin Dashboard — app-wide aggregate metrics for the operator console.
+"""Admin Dashboard — app-wide aggregate metrics + admin operations.
 
 Separate from `admin_routes.py` (which is registry-intel-only) so we keep
-each concern in its own thin router. Endpoints live under /api/admin/dashboard.
+each concern in its own thin router. Endpoints live under /api/admin/dashboard
+and /api/admin/users.
 """
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from bson import ObjectId
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 log = logging.getLogger("perk_orbit.admin_dashboard")
 
@@ -22,10 +24,51 @@ def _admin_required(get_current_user):
 
 
 def build_admin_dashboard_router(db, get_current_user) -> APIRouter:
-    router = APIRouter(prefix="/api/admin/dashboard", tags=["admin"])
+    router = APIRouter(prefix="/api/admin", tags=["admin"])
     admin_only = _admin_required(get_current_user)
 
-    @router.get("/stats")
+    # =====================================================================
+    #  Force-logout — bump token_version to instantly revoke all live tokens
+    # =====================================================================
+    @router.post("/force-logout")
+    async def force_logout(
+        body: dict = Body(default={}),
+        _admin=Depends(admin_only),
+    ):
+        """Admin panic-button. Invalidates every access + refresh token currently
+        held by the target user across every device by incrementing the user's
+        `token_version`. Next request → 401, frontend redirects to /login.
+
+        Body: { "email": "user@example.com" }  (case-insensitive)
+        """
+        email = (body.get("email") or "").strip().lower()
+        if not email:
+            raise HTTPException(status_code=400, detail="email is required")
+        user = await db.users.find_one({"email": email})
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User {email!r} not found")
+        current_tv = int(user.get("token_version") or 0)
+        new_tv = current_tv + 1
+        res = await db.users.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"token_version": new_tv,
+                      "last_force_logout_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        log.warning("Admin force-logout: email=%s token_version %d→%d",
+                    email, current_tv, new_tv)
+        return {
+            "ok": True,
+            "email": email,
+            "user_id": str(user["_id"]),
+            "previous_token_version": current_tv,
+            "new_token_version": new_tv,
+            "users_updated": res.modified_count,
+        }
+
+    # =====================================================================
+    #  Dashboard stats
+    # =====================================================================
+    @router.get("/dashboard/stats")
     async def dashboard_stats(_admin=Depends(admin_only)):
         """Single roll-up of the metrics an admin demos to investors / KYC:
         total ₹ saved, active Pro members, pending registry items + recent activity.

@@ -49,19 +49,21 @@ def _jwt_secret() -> str:
     return os.environ["JWT_SECRET"]
 
 
-def create_access_token(uid: str, email: str) -> str:
+def create_access_token(uid: str, email: str, token_version: int = 0) -> str:
     payload = {
         "sub": uid,
         "email": email,
+        "tv": token_version,
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES),
         "type": "access",
     }
     return jwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
-def create_refresh_token(uid: str) -> str:
+def create_refresh_token(uid: str, token_version: int = 0) -> str:
     payload = {
         "sub": uid,
+        "tv": token_version,
         "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DAYS),
         "type": "refresh",
     }
@@ -92,6 +94,12 @@ def make_get_current_user(db):
             user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
+            # Force-logout / token-version check — admin can bump token_version
+            # via /api/admin/force-logout to instantly invalidate all live tokens.
+            user_tv = int(user.get("token_version") or 0)
+            token_tv = int(payload.get("tv") or 0)
+            if token_tv < user_tv:
+                raise HTTPException(status_code=401, detail="Session revoked. Please log in again.")
             user["_id"] = str(user["_id"])
             user.pop("password_hash", None)
             return user
@@ -157,14 +165,15 @@ def build_auth_router(db) -> APIRouter:
             "name": payload.name or "",
             "phone": payload.phone or "",
             "role": "user",
+            "token_version": 0,
             "created_at": datetime.now(timezone.utc),
         }
         res = await db.users.insert_one(doc)
         uid = str(res.inserted_id)
         if payload.pin_to_claim:
             await _bind_legacy_pin(uid, payload.pin_to_claim)
-        access = create_access_token(uid, email)
-        refresh = create_refresh_token(uid)
+        access = create_access_token(uid, email, 0)
+        refresh = create_refresh_token(uid, 0)
         _set_auth_cookies(response, access, refresh)
         return {"id": uid, "email": email, "name": doc["name"], "phone": doc["phone"], "role": doc.get("role", "user"), "access_token": access}
 
@@ -175,8 +184,9 @@ def build_auth_router(db) -> APIRouter:
         if not user or not verify_password(payload.password, user.get("password_hash", "")):
             raise HTTPException(status_code=401, detail="Invalid email or password")
         uid = str(user["_id"])
-        access = create_access_token(uid, email)
-        refresh = create_refresh_token(uid)
+        tv = int(user.get("token_version") or 0)
+        access = create_access_token(uid, email, tv)
+        refresh = create_refresh_token(uid, tv)
         _set_auth_cookies(response, access, refresh)
         return {
             "id": uid,
@@ -292,9 +302,14 @@ def build_auth_router(db) -> APIRouter:
         if not user:
             raise HTTPException(status_code=400, detail="Account no longer exists")
 
+        # Bump token_version too — password reset invalidates ALL prior sessions
+        new_tv = int(user.get("token_version") or 0) + 1
         await db.users.update_one(
             {"_id": user["_id"]},
-            {"$set": {"password_hash": hash_password(payload.new_password)}},
+            {"$set": {
+                "password_hash": hash_password(payload.new_password),
+                "token_version": new_tv,
+            }},
         )
         await db.password_resets.update_one(
             {"_id": rec["_id"]},
@@ -303,8 +318,8 @@ def build_auth_router(db) -> APIRouter:
         # Auto-sign in after reset for a friction-free flow
         uid = str(user["_id"])
         email = user["email"]
-        access = create_access_token(uid, email)
-        refresh = create_refresh_token(uid)
+        access = create_access_token(uid, email, new_tv)
+        refresh = create_refresh_token(uid, new_tv)
         _set_auth_cookies(response, access, refresh)
         return {"ok": True, "email": email, "id": uid, "access_token": access}
 
