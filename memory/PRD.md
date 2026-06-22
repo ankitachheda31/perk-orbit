@@ -327,3 +327,17 @@
 - **Health 14/14** · `pytest backend/tests/ -q` → 21/21 functional flows pass · Lint clean (Python + JS).
 - **LAUNCH_CHECKLIST score**: 61% → **64% (51/80)**. Items 4.x (App-side compliance UX) and 5.x (Security & Infra) ticked.
 - **Owner next step**: build APK on Android Studio locally, run the A/B/C/D + S matrix on a real device, ping back with the table marked ✅/❌.
+
+
+## 2026-02-22 — Razorpay test-key rotation + min-amount guard
+- **Credentials rotated** across `backend/.env` and `frontend/.env`:
+  - `RAZORPAY_KEY_ID`: `rzp_test_T34ATywCNmVeUA` → `rzp_test_T4iuN2WERDhz0S`
+  - `RAZORPAY_KEY_SECRET`: `uNOg4crjMmhQb8toUB0JPs09` → `Xzp7eObtneiropAybzuTAd1B`
+  - `VITE_RAZORPAY_KEY_ID`: previous stale value `rzp_test_T2eKeMQSIX0Vlq` → unified to `rzp_test_T4iuN2WERDhz0S` (frontend/backend were on different keys before — now aligned).
+- **Hardening**: `POST /api/payments/order` now rejects `amount_inr < 1` with HTTP 400 before hitting Razorpay's API (was previously relying on upstream rejection which returned an empty body).
+- **End-to-end live test against real Razorpay sandbox** with new keys:
+  - Created order `order_T4iwVrR9GBxFvV` (amount 9900 paise, ✅)
+  - Invalid signature → HTTP 400 + Pro membership NOT activated (✅)
+  - Valid HMAC-SHA256(order_id|payment_id, KEY_SECRET) → Pro activated, payment marked paid, welcome notification fired (✅)
+- Health 14/14 · `pytest backend/tests` 21/21 functional flows pass · backend reloaded clean.
+- **No new code files created** — full Razorpay Standard Checkout integration was already present (`routes/billing.py`, `services/db.py::verify_razorpay_signature`, `frontend/src/lib/razorpay.js`); only env credentials updated + one defensive validation line added.

@@ -56,6 +56,9 @@ def build_billing_router(db) -> APIRouter:
     async def create_payment_order(payload: RzpOrderRequest):
         if not rzp_client:
             raise HTTPException(status_code=503, detail="Razorpay not configured")
+        # Razorpay minimum: 100 paise = ₹1. Guard before hitting the API.
+        if not payload.amount_inr or payload.amount_inr < 1:
+            raise HTTPException(status_code=400, detail="Minimum amount is ₹1 (100 paise)")
         receipt = f"perk-{secrets.token_hex(6)}"[:40]
         try:
             order = rzp_client.order.create({
