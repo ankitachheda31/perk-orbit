@@ -94,6 +94,23 @@ export default function App() {
   }
   useEffect(() => { if (pin && !locked) refreshMember() /* eslint-disable-next-line */ }, [pin, locked])
 
+  // Auto-refetch membership status when the tab regains focus AND every 60s
+  // while foregrounded. Stops stale Pro/cancelled state from sticking after
+  // admin-side changes (force-logout, refund, manual DB wipe, etc).
+  useEffect(() => {
+    if (!pin || locked) return
+    const onFocus = () => { if (document.visibilityState === 'visible') refreshMember() }
+    document.addEventListener('visibilitychange', onFocus)
+    window.addEventListener('focus', onFocus)
+    const id = setInterval(() => { if (document.visibilityState === 'visible') refreshMember() }, 60_000)
+    return () => {
+      document.removeEventListener('visibilitychange', onFocus)
+      window.removeEventListener('focus', onFocus)
+      clearInterval(id)
+    }
+    // eslint-disable-next-line
+  }, [pin, locked])
+
   const refreshNotifs = async () => {
     if (!pin) return
     try {

@@ -12,6 +12,30 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// 401 handler — if the token is revoked (admin force-logout) or expired, wipe
+// local credentials and reload to the login screen. Prevents stale React state
+// from showing data the server has already revoked access to.
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    const status = err?.response?.status
+    const detail = err?.response?.data?.detail || ''
+    if (status === 401 && /revoked|expired|invalid/i.test(detail)) {
+      try {
+        localStorage.removeItem('perk_orbit_token')
+        localStorage.removeItem('perk_orbit_pin')
+        localStorage.removeItem('perk_orbit_pin_set')
+      } catch { /* noop */ }
+      // Hard reload to drop ALL React state (memberStatus, vouchers, etc.)
+      if (typeof window !== 'undefined' && !window.__perk_reloading__) {
+        window.__perk_reloading__ = true
+        window.location.replace(window.location.pathname)
+      }
+    }
+    return Promise.reject(err)
+  }
+)
+
 export const Auth = {
   signup: (body) => api.post('/auth/signup', body).then(r => r.data),
   login: (body) => api.post('/auth/login', body).then(r => r.data),
